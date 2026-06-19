@@ -2,6 +2,16 @@
   "name": "square-sdk-cli",
   "version": "0.1.0",
   "description": "Command-line interface for the Square API, exposing every SDK namespace and method via runtime introspection.",
+  "keywords": [
+    "square",
+    "square-api",
+    "square-sdk",
+    "cli",
+    "payments",
+    "checkout",
+    "bun",
+    "sdk"
+  ],
   "module": "bin/square.ts",
   "type": "module",
   "license": "MIT",
