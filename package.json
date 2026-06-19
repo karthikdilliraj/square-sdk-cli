@@ -1,0 +1,39 @@
+{
+  "name": "square-sdk-cli",
+  "version": "0.1.0",
+  "description": "Command-line interface for the Square API, exposing every SDK namespace and method via runtime introspection.",
+  "module": "bin/square.ts",
+  "type": "module",
+  "license": "MIT",
+  "author": "karthikdilliraj",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/karthikdilliraj/square-sdk-cli.git"
+  },
+  "homepage": "https://github.com/karthikdilliraj/square-sdk-cli#readme",
+  "bugs": "https://github.com/karthikdilliraj/square-sdk-cli/issues",
+  "bin": {
+    "square": "dist/square.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "bun scripts/build.ts",
+    "test": "bun test",
+    "prepublishOnly": "bun run build && bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "square": "^44.1.0"
+  }
+}
