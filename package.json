@@ -1,6 +1,6 @@
 {
   "name": "square-sdk-cli",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Command-line interface for the Square API, exposing every SDK namespace and method via runtime introspection.",
   "keywords": [
     "square",
