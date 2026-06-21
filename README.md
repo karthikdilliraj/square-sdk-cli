@@ -55,10 +55,19 @@ square payments --help
 square terminal actions create --help
 
 # Call methods
-square payments list
+square locations list
+square catalog list
+square payments list --sortField CREATED_AT
+square customers list --sortField DEFAULT --sortOrder ASC
 square payments create --json '{"sourceId":"...","idempotencyKey":"..."}' --amountMoney.amount 100 --amountMoney.currency USD
-square customers list --stream
+square customers list --sortField DEFAULT --sortOrder ASC --stream
 ```
+
+> Note: some `list` endpoints (e.g. `payments`, `customers`) require explicit
+> sort flags — the Square SDK serializes a missing sort field as an empty string
+> and the API rejects it with `INVALID_ENUM_VALUE ... sort_field`. Pass
+> `--sortField` (and `--sortOrder` for `customers`) as shown above. Endpoints
+> like `locations` and `catalog` need no arguments.
 
 ### Request body
 
