@@ -5,7 +5,11 @@
 import type { MethodEntry } from "./introspect.ts";
 
 export interface ExecuteOptions {
-  stream?: boolean | true;
+  stream?: boolean;
+  /** Stop after this many items across all pages. */
+  maxItems?: number;
+  /** Stop after fetching this many pages. */
+  maxPages?: number;
 }
 
 type PageLike = {
@@ -29,33 +33,35 @@ function isPage(value: unknown): value is AsyncIterable<unknown> & PageLike {
 }
 
 /**
- * Collect all pages from a pageable result into a flat array.
+ * Async generator that yields items from all pages, honoring item/page limits.
+ * The next page is only fetched when more items are still wanted.
  */
-async function collectPages(firstPage: PageLike): Promise<unknown[]> {
-  const results: unknown[] = [];
+async function* iteratePages(firstPage: PageLike, options: ExecuteOptions): AsyncGenerator<unknown> {
+  const { maxItems, maxPages } = options;
   let page: PageLike = firstPage;
-
+  let pages = 1;
+  let items = 0;
   while (true) {
-    results.push(...page.data);
-    if (!page.hasNextPage()) break;
+    for (const item of page.data) {
+      if (maxItems !== undefined && items >= maxItems) return;
+      yield item;
+      items++;
+    }
+    if (!page.hasNextPage()) return;
+    if (maxPages !== undefined && pages >= maxPages) return;
+    if (maxItems !== undefined && items >= maxItems) return;
     page = (await page.getNextPage()) as PageLike;
+    pages++;
   }
-
-  return results;
 }
 
 /**
- * Async generator that yields items from all pages.
+ * Collect pages into a flat array, honoring item/page limits.
  */
-async function* streamPages(firstPage: PageLike): AsyncGenerator<unknown> {
-  let page: PageLike = firstPage;
-  while (true) {
-    for (const item of page.data) {
-      yield item;
-    }
-    if (!page.hasNextPage()) break;
-    page = (await page.getNextPage()) as PageLike;
-  }
+async function collectPages(firstPage: PageLike, options: ExecuteOptions): Promise<unknown[]> {
+  const results: unknown[] = [];
+  for await (const item of iteratePages(firstPage, options)) results.push(item);
+  return results;
 }
 
 /**
@@ -66,6 +72,7 @@ async function* streamPages(firstPage: PageLike): AsyncGenerator<unknown> {
  *
  * When stream=false/default: returns Promise<unknown>.
  *   - Pageable results are collected into a flat array.
+ *   - maxItems / maxPages cap paging in both modes.
  *   - Non-pageable results are returned as-is.
  *
  * Let SquareError-shaped throws propagate.
@@ -79,7 +86,7 @@ export function execute(
     return (async function* () {
       const result = await Promise.resolve(method.fn(request));
       if (isPage(result)) {
-        yield* streamPages(result);
+        yield* iteratePages(result, options);
       } else {
         yield result;
       }
@@ -89,7 +96,7 @@ export function execute(
   return (async () => {
     const result = await Promise.resolve(method.fn(request));
     if (isPage(result)) {
-      return collectPages(result);
+      return collectPages(result, options);
     }
     return result;
   })();

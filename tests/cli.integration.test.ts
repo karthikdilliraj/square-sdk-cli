@@ -4,6 +4,45 @@ import * as path from "path";
 import * as os from "os";
 import { run } from "../src/cli";
 import { createMockClient } from "./fixtures/mockClient";
+import type { Prompter } from "../src/prompt";
+
+function fakePrompter(opts: { interactive: boolean; confirm?: boolean; secret?: string; stdin?: string }) {
+  const calls = { confirm: [] as string[], secret: [] as string[] };
+  const prompter: Prompter = {
+    isInteractive: () => opts.interactive,
+    confirm: async (q) => {
+      calls.confirm.push(q);
+      return opts.confirm ?? false;
+    },
+    secret: async (q) => {
+      calls.secret.push(q);
+      return opts.secret ?? "";
+    },
+    readStdin: () => opts.stdin ?? "",
+  };
+  return { prompter, calls };
+}
+
+/** Deps whose payments.create records the request it was called with. */
+function capturingCreateDeps(prompter?: Prompter) {
+  const captured: { request?: any } = {};
+  return {
+    captured,
+    deps: {
+      prompter,
+      createClient: (_auth: any) => {
+        const m = createMockClient() as any;
+        const p = m.payments;
+        p.create = async (req: unknown) => {
+          captured.request = req;
+          return { payment: { id: "new-pay" } };
+        };
+        Object.defineProperty(m, "payments", { get: () => p });
+        return m;
+      },
+    },
+  };
+}
 
 // Dependency injection: createClient always returns mock
 const deps = { createClient: (_auth: any) => createMockClient() as any };
@@ -202,7 +241,7 @@ describe("cli integration - dry run", () => {
       dryRun: true,
       environment: "sandbox",
       method: "payments create",
-      request: { amountMoney: { amount: 100 } },
+      request: { amountMoney: { amount: 100 }, idempotencyKey: expect.any(String) },
     });
   });
 });
@@ -218,7 +257,7 @@ describe("cli integration - --json sources", () => {
       (msg) => output.push(msg)
     );
     expect(exitCode).toBe(0);
-    expect(JSON.parse(output.join("\n")).request).toEqual({ sourceId: "cnon:card" });
+    expect(JSON.parse(output.join("\n")).request).toMatchObject({ sourceId: "cnon:card" });
   });
 
   it("missing @file exits 1 with a clear error", async () => {
@@ -311,5 +350,146 @@ describe("cli integration - help and unknown commands without auth", () => {
     const exitCode = await run(["payments", "list"], deps, () => {}, (msg) => errOut.push(msg));
     expect(exitCode).toBe(1);
     expect(errOut.join("\n")).toMatch(/No authentication found/);
+  });
+});
+
+describe("cli integration - paging limits", () => {
+  it("--max-items caps collected results", async () => {
+    const output: string[] = [];
+    const exitCode = await run(["payments", "list", "--max-items", "2", "--json-output"], deps, (m) => output.push(m));
+    expect(exitCode).toBe(0);
+    expect(JSON.parse(output[0]!).map((p: any) => p.id)).toEqual(["pay1", "pay2"]);
+  });
+
+  it("--max-pages caps streamed results", async () => {
+    const output: string[] = [];
+    const exitCode = await run(["payments", "list", "--max-pages", "1", "--stream"], deps, (m) => output.push(m));
+    expect(exitCode).toBe(0);
+    expect(output.length).toBe(2); // mock pages hold 2 items
+  });
+
+  it("rejects a non-positive --max-items", async () => {
+    const errOut: string[] = [];
+    const exitCode = await run(["payments", "list", "--max-items", "0"], deps, () => {}, (m) => errOut.push(m));
+    expect(exitCode).toBe(1);
+    expect(errOut.join("\n")).toMatch(/--max-items must be a positive integer/);
+  });
+});
+
+describe("cli integration - auto idempotency key", () => {
+  it("adds a key to write calls and reports it on stderr", async () => {
+    const { deps: d, captured } = capturingCreateDeps();
+    const errOut: string[] = [];
+    const exitCode = await run(["payments", "create"], d, () => {}, (m) => errOut.push(m));
+    expect(exitCode).toBe(0);
+    expect(captured.request.idempotencyKey).toMatch(/^[0-9a-f-]{36}$/);
+    expect(errOut.join("\n")).toContain(captured.request.idempotencyKey);
+  });
+
+  it("keeps a key the user passed", async () => {
+    const { deps: d, captured } = capturingCreateDeps();
+    const errOut: string[] = [];
+    await run(["payments", "create", "--idempotencyKey", "mine"], d, () => {}, (m) => errOut.push(m));
+    expect(captured.request.idempotencyKey).toBe("mine");
+    expect(errOut).toEqual([]);
+  });
+
+  it("does not add a key to read calls", async () => {
+    const output: string[] = [];
+    await run(["locations", "get", "--locationId", "L1", "--dry-run"], deps, (m) => output.push(m));
+    expect(JSON.parse(output.join("\n")).request).toEqual({ locationId: "L1" });
+  });
+});
+
+describe("cli integration - production write confirmation", () => {
+  beforeEach(() => {
+    process.env["SQUARE_ENVIRONMENT"] = "production";
+  });
+
+  it("refuses a write in production when not interactive and no --yes", async () => {
+    const { prompter } = fakePrompter({ interactive: false });
+    const { deps: d, captured } = capturingCreateDeps(prompter);
+    const errOut: string[] = [];
+    const exitCode = await run(["payments", "create"], d, () => {}, (m) => errOut.push(m));
+    expect(exitCode).toBe(1);
+    expect(captured.request).toBeUndefined();
+    expect(errOut.join("\n")).toMatch(/PRODUCTION.*--yes/);
+  });
+
+  it("asks for confirmation interactively and aborts on no", async () => {
+    const { prompter, calls } = fakePrompter({ interactive: true, confirm: false });
+    const { deps: d, captured } = capturingCreateDeps(prompter);
+    const exitCode = await run(["payments", "create"], d, () => {}, () => {});
+    expect(exitCode).toBe(1);
+    expect(calls.confirm[0]).toMatch(/payments create.*PRODUCTION/);
+    expect(captured.request).toBeUndefined();
+  });
+
+  it("runs after an interactive yes", async () => {
+    const { prompter } = fakePrompter({ interactive: true, confirm: true });
+    const { deps: d, captured } = capturingCreateDeps(prompter);
+    const exitCode = await run(["payments", "create"], d, () => {}, () => {});
+    expect(exitCode).toBe(0);
+    expect(captured.request).toBeDefined();
+  });
+
+  it("--yes skips the prompt", async () => {
+    const { prompter, calls } = fakePrompter({ interactive: false });
+    const { deps: d, captured } = capturingCreateDeps(prompter);
+    const exitCode = await run(["payments", "create", "--yes"], d, () => {}, () => {});
+    expect(exitCode).toBe(0);
+    expect(calls.confirm).toEqual([]);
+    expect(captured.request).toBeDefined();
+  });
+
+  it("read calls in production do not prompt", async () => {
+    const { prompter, calls } = fakePrompter({ interactive: false });
+    const exitCode = await run(["payments", "list"], { ...deps, prompter }, () => {}, () => {});
+    expect(exitCode).toBe(0);
+    expect(calls.confirm).toEqual([]);
+  });
+
+  it("--dry-run in production does not prompt", async () => {
+    const { prompter, calls } = fakePrompter({ interactive: false });
+    const exitCode = await run(["payments", "create", "--dry-run"], { ...deps, prompter }, () => {}, () => {});
+    expect(exitCode).toBe(0);
+    expect(calls.confirm).toEqual([]);
+  });
+});
+
+describe("cli integration - config set token sources", () => {
+  async function savedToken(name: string): Promise<string> {
+    return JSON.parse(fs.readFileSync(tmpConfigPath, "utf8")).profiles[name].token;
+  }
+
+  it("--token - reads the token from stdin", async () => {
+    const { prompter } = fakePrompter({ interactive: false, stdin: "stdin-token\n" });
+    const exitCode = await run(["config", "set", "p", "--token", "-"], { ...deps, prompter }, () => {});
+    expect(exitCode).toBe(0);
+    expect(await savedToken("p")).toBe("stdin-token");
+  });
+
+  it("prompts for a hidden token when --token is omitted in a terminal", async () => {
+    const { prompter, calls } = fakePrompter({ interactive: true, secret: "typed-token" });
+    const exitCode = await run(["config", "set", "p"], { ...deps, prompter }, () => {});
+    expect(exitCode).toBe(0);
+    expect(calls.secret.length).toBe(1);
+    expect(await savedToken("p")).toBe("typed-token");
+  });
+
+  it("errors when --token is omitted and not in a terminal", async () => {
+    const { prompter } = fakePrompter({ interactive: false });
+    const errOut: string[] = [];
+    const exitCode = await run(["config", "set", "p"], { ...deps, prompter }, () => {}, (m) => errOut.push(m));
+    expect(exitCode).toBe(1);
+    expect(errOut.join("\n")).toMatch(/--token -/);
+  });
+
+  it("rejects an empty token", async () => {
+    const { prompter } = fakePrompter({ interactive: false, stdin: "   \n" });
+    const errOut: string[] = [];
+    const exitCode = await run(["config", "set", "p", "--token", "-"], { ...deps, prompter }, () => {}, (m) => errOut.push(m));
+    expect(exitCode).toBe(1);
+    expect(errOut.join("\n")).toMatch(/token is empty/);
   });
 });

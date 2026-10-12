@@ -4,21 +4,25 @@
 
 import { SquareClient, SquareError } from "square";
 import { parseArgs } from "./args.ts";
-import { buildRequest, readJsonArg } from "./merge.ts";
+import { buildRequest, readJsonArg, ensureIdempotencyKey } from "./merge.ts";
 import { load, save, setProfile, getProfile, listProfiles, useProfile } from "./config.ts";
 import { resolveAuth, parseEnvironment } from "./auth.ts";
 import { createClient as defaultCreateClient } from "./client.ts";
-import { buildTree, findNamespace, resolvePath } from "./introspect.ts";
+import { buildTree, findNamespace, resolvePath, isReadOnlyMethod } from "./introspect.ts";
 import { execute } from "./execute.ts";
 import { print, renderError, bigIntReplacer } from "./output.ts";
 import { renderRootHelp, renderNamespaceHelp, renderMethodHelp } from "./help.ts";
+import { terminalPrompter, type Prompter } from "./prompt.ts";
 
 export interface RunDeps {
   createClient: (auth: { token: string; environment: "sandbox" | "production" }) => SquareClient;
+  /** Terminal input (confirmations, hidden token entry, stdin). Defaults to the real terminal. */
+  prompter?: Prompter;
 }
 
 const defaultDeps: RunDeps = {
   createClient: defaultCreateClient,
+  prompter: terminalPrompter,
 };
 
 /**
@@ -37,12 +41,14 @@ export async function run(
   const stdout = stdoutWrite ?? ((msg: string) => process.stdout.write(msg + "\n"));
   const stderr = stderrWrite ?? ((msg: string) => process.stderr.write(msg + "\n"));
 
+  const prompter = deps.prompter ?? terminalPrompter;
+
   const parsed = parseArgs(argv);
   const { positionals, flags, fields } = parsed;
 
   // ---- Config subcommands (no auth required) ----
   if (positionals[0] === "config") {
-    return runConfigCommand(positionals.slice(1), flags, stdout, stderr);
+    return runConfigCommand(positionals.slice(1), flags, prompter, stdout, stderr);
   }
 
   // ---- Help and command validation (no auth required) ----
@@ -108,7 +114,11 @@ export async function run(
 
   // Build request
   let request: object;
+  let maxItems: number | undefined;
+  let maxPages: number | undefined;
   try {
+    maxItems = parseLimit(flags.maxItems, "--max-items");
+    maxPages = parseLimit(flags.maxPages, "--max-pages");
     if (flags.json !== undefined && typeof flags.json !== "string") {
       throw new Error("--json requires a value: a JSON string, @file, or - for stdin");
     }
@@ -122,6 +132,11 @@ export async function run(
   }
 
   const raw = flags.jsonOutput === true;
+  const methodName = resolveResult.method.name;
+  const readOnly = isReadOnlyMethod(methodName);
+
+  // Write calls get a fresh idempotencyKey unless one was given
+  const generatedKey = readOnly ? undefined : ensureIdempotencyKey(request, methodName);
 
   // Dry run: show what would be sent, without calling the API
   if (flags.dryRun) {
@@ -137,10 +152,26 @@ export async function run(
     return 0;
   }
 
+  // Production writes need confirmation (or --yes)
+  if (auth.environment === "production" && !readOnly && !flags.yes) {
+    const command = positionals.join(" ");
+    if (!prompter.isInteractive()) {
+      stderr(`✗ Error: Refusing to run "${command}" against PRODUCTION without confirmation. Pass --yes to proceed.`);
+      return 1;
+    }
+    const ok = await prompter.confirm(`About to run "${command}" against PRODUCTION. Continue? [y/N] `);
+    if (!ok) {
+      stderr("Aborted.");
+      return 1;
+    }
+  }
+
+  if (generatedKey) stderr(`Using idempotencyKey ${generatedKey} (pass --idempotencyKey to retry safely)`);
+
   // Execute
   try {
     const streamMode = flags.stream === true;
-    const result = execute(resolveResult.method, request, { stream: streamMode });
+    const result = execute(resolveResult.method, request, { stream: streamMode, maxItems, maxPages });
 
     if (streamMode) {
       // Stream mode: one compact JSON object per line (NDJSON)
@@ -162,7 +193,8 @@ export async function run(
 
 async function runConfigCommand(
   args: string[],
-  flags: ReturnType<typeof parseArgs>["flags"] & { token?: string; env?: string },
+  flags: ReturnType<typeof parseArgs>["flags"],
+  prompter: Prompter,
   stdout: (msg: string) => void,
   stderr: (msg: string) => void
 ): Promise<number> {
@@ -175,17 +207,36 @@ async function runConfigCommand(
         stderr("Usage: square config set <profile> --token <token> [--env <environment>]");
         return 1;
       }
-      if (!flags.token) {
-        stderr("Error: --token is required for config set");
-        return 1;
-      }
       let environment: "sandbox" | "production" = "sandbox";
       try {
         if (flags.env !== undefined) environment = parseEnvironment(String(flags.env), "--env");
       } catch (e: unknown) {
         return renderError(e, { writeFn: stderr });
       }
-      await setProfile(profileName, { token: flags.token, environment });
+
+      // Token sources: --token - (stdin), hidden prompt when --token is omitted,
+      // or an inline value (which ends up in shell history).
+      let token: string;
+      try {
+        if (flags.token === "-") {
+          token = prompter.readStdin().trim();
+        } else if (typeof flags.token === "string") {
+          token = flags.token;
+        } else if (prompter.isInteractive()) {
+          token = (await prompter.secret("Access token: ")).trim();
+        } else {
+          stderr("Error: --token is required for config set (use --token - to read it from stdin)");
+          return 1;
+        }
+      } catch (e: unknown) {
+        return renderError(e, { writeFn: stderr });
+      }
+      if (!token) {
+        stderr("Error: token is empty");
+        return 1;
+      }
+
+      await setProfile(profileName, { token, environment });
       stdout(`Profile "${profileName}" saved.`);
       return 0;
     }
@@ -240,6 +291,16 @@ async function runConfigCommand(
       return 1;
     }
   }
+}
+
+/** Parse an optional positive-integer flag value. */
+function parseLimit(value: unknown, flag: string): number | undefined {
+  if (value === undefined) return undefined;
+  const n = Number(value);
+  if (typeof value !== "string" || !Number.isInteger(n) || n < 1) {
+    throw new Error(`${flag} must be a positive integer`);
+  }
+  return n;
 }
 
 function maskToken(token: string): string {

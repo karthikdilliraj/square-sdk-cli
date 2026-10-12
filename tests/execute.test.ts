@@ -88,3 +88,28 @@ describe("execute - BigInt result from output", () => {
     expect(json).toContain("100");
   });
 });
+
+describe("execute - paging limits", () => {
+  it("maxItems stops mid-page", async () => {
+    const result = await execute(getMethod("payments", "list"), {}, { maxItems: 1 });
+    expect((result as any[]).map((p) => p.id)).toEqual(["pay1"]);
+  });
+
+  it("maxPages stops after the given number of pages", async () => {
+    const result = await execute(getMethod("payments", "list"), {}, { maxPages: 1 });
+    expect((result as any[]).length).toBe(2);
+  });
+
+  it("limits larger than the data return everything", async () => {
+    const result = await execute(getMethod("payments", "list"), {}, { maxItems: 100, maxPages: 100 });
+    expect((result as any[]).length).toBe(3);
+  });
+
+  it("maxItems applies in stream mode", async () => {
+    const items: unknown[] = [];
+    for await (const item of execute(getMethod("payments", "list"), {}, { stream: true, maxItems: 3 }) as AsyncIterable<unknown>) {
+      items.push(item);
+    }
+    expect(items.length).toBe(3);
+  });
+});

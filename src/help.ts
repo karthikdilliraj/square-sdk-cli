@@ -13,6 +13,9 @@ Global flags:
   --json-output         Output as compact JSON (no pretty print)
   --stream              Stream pageable results as NDJSON (one item per line)
   --dry-run             Print the request that would be sent, without sending it
+  --max-items <n>       Stop paging after n items
+  --max-pages <n>       Stop paging after n pages
+  --yes                 Skip the confirmation for write calls in production
   --help                Show this help message
 `.trim();
 
@@ -36,7 +39,8 @@ export function renderRootHelp(tree: NamespaceNode): string {
 
   lines.push("");
   lines.push("Built-in commands:");
-  lines.push("  config set <profile> --token <tok> --env <env>   Create/update a profile");
+  lines.push("  config set <profile> [--token <tok>|-] --env <env> Create/update a profile");
+  lines.push("                                                    (omit --token to be prompted)");
   lines.push("  config get <profile>                              Show profile (token masked)");
   lines.push("  config list                                       List all profiles");
   lines.push("  config use <profile>                              Set default profile");

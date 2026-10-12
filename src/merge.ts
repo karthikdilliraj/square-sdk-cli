@@ -3,6 +3,7 @@
  */
 
 import * as fs from "fs";
+import { randomUUID } from "crypto";
 
 export interface FieldEntry {
   path: string;
@@ -110,4 +111,24 @@ export function readJsonArg(
     }
   }
   return raw;
+}
+
+/**
+ * Add a random idempotencyKey to a write request that doesn't have one, and
+ * return it (or undefined if nothing was added). Safe for endpoints that don't
+ * take a key: the SDK strips unrecognized body keys before sending.
+ * Skipped for methods like cancelByIdempotencyKey, where the key must name an
+ * existing operation rather than be fresh.
+ */
+export function ensureIdempotencyKey(
+  request: object,
+  methodName: string,
+  newKey: () => string = randomUUID
+): string | undefined {
+  if (/IdempotencyKey/.test(methodName)) return undefined;
+  const body = request as Record<string, unknown>;
+  if (body["idempotencyKey"] !== undefined) return undefined;
+  const key = newKey();
+  body["idempotencyKey"] = key;
+  return key;
 }

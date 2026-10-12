@@ -184,3 +184,15 @@ export function resolvePath(
 
   return { node: current, method };
 }
+
+/**
+ * Name-based guess at whether a method only reads data. Used to decide which
+ * calls need confirmation in production and an auto idempotency key. Unknown
+ * names count as writes, which errs on the side of asking.
+ */
+const READ_ONLY_PREFIX =
+  /^(get|list|search|retrieve|batchGet|bulkRetrieve|calculate|info|changes|deprecatedGet|deprecatedBatchGet|v1List|v1Retrieve)/;
+
+export function isReadOnlyMethod(name: string): boolean {
+  return READ_ONLY_PREFIX.test(name);
+}

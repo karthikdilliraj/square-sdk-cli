@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { buildRequest, readJsonArg } from "../src/merge";
+import { buildRequest, readJsonArg, ensureIdempotencyKey } from "../src/merge";
 
 describe("buildRequest - json only", () => {
   it("parses json string into object", () => {
@@ -137,5 +137,25 @@ describe("buildRequest - field path guard", () => {
 
   it("rejects a forbidden segment deeper in the path", () => {
     expect(() => buildRequest(undefined, [{ path: "a.__proto__.b", value: "1" }])).toThrow(/not allowed/);
+  });
+});
+
+describe("ensureIdempotencyKey", () => {
+  it("adds a key when missing and returns it", () => {
+    const req: any = {};
+    expect(ensureIdempotencyKey(req, "create", () => "k1")).toBe("k1");
+    expect(req.idempotencyKey).toBe("k1");
+  });
+
+  it("leaves an existing key alone", () => {
+    const req: any = { idempotencyKey: "mine" };
+    expect(ensureIdempotencyKey(req, "create", () => "k1")).toBeUndefined();
+    expect(req.idempotencyKey).toBe("mine");
+  });
+
+  it("skips methods where the key identifies an existing operation", () => {
+    const req: any = {};
+    expect(ensureIdempotencyKey(req, "cancelByIdempotencyKey", () => "k1")).toBeUndefined();
+    expect(req.idempotencyKey).toBeUndefined();
   });
 });

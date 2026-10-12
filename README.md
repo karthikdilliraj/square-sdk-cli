@@ -32,12 +32,16 @@ Credentials are stored on your machine at
 Tokens are written with `0600` permissions and masked when read back.
 
 ```bash
-square config set sandbox --token <ACCESS_TOKEN> --env sandbox
-square config set prod    --token <ACCESS_TOKEN> --env production
+square config set sandbox --env sandbox      # prompts for the token (hidden)
+square config set prod --env production      # same
+pbpaste | square config set prod --token - --env production   # token from stdin
 square config use sandbox          # set default profile
 square config list
 square config get sandbox          # token shown masked
 ```
+
+Omitting `--token` (or passing `--token -`) keeps the token out of your shell
+history. `--token <ACCESS_TOKEN>` inline still works.
 
 Auth resolution order: `--profile <name>` → `--token` / `SQUARE_ACCESS_TOKEN`
 env → default profile.
@@ -94,7 +98,23 @@ cat payment.json | square payments create --json -
 | `--json-output` | compact JSON output (no pretty print)       |
 | `--stream`      | stream pageable results as NDJSON           |
 | `--dry-run`     | print the request without sending it        |
+| `--max-items <n>` | stop paging after n items                 |
+| `--max-pages <n>` | stop paging after n pages                 |
+| `--yes`         | skip the production write confirmation      |
 | `--help`        | show help                                   |
+
+### Safety defaults
+
+- **Production writes ask first.** Any call against `production` whose method
+  isn't a read (`get*`, `list*`, `search*`, `retrieve*`, `batchGet*`, …) asks
+  `Continue? [y/N]`. In scripts or CI (no terminal), it refuses unless you pass
+  `--yes`. `--dry-run` never prompts.
+- **Automatic idempotency keys.** Write calls without an `idempotencyKey` get a
+  random one, printed to stderr. To retry safely, pass it back with
+  `--idempotencyKey <key>`. Endpoints that don't use a key ignore it.
+- **Paging limits.** `list` calls fetch every page by default. Cap them with
+  `--max-items` or `--max-pages`. (`--limit` is still the API's own page-size
+  field.)
 
 > Per-field help is structural only — the SDK's field schemas live in its
 > `.d.ts` types and aren't available at runtime. Use `--json` for full bodies.

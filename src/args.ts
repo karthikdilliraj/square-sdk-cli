@@ -7,9 +7,12 @@ export interface ParsedFlags {
   token?: string;
   env?: string;
   json?: string;
+  maxItems?: string;
+  maxPages?: string;
   jsonOutput?: true;
   stream?: true;
   dryRun?: true;
+  yes?: true;
   help?: true;
 }
 
@@ -30,6 +33,8 @@ const STRING_FLAGS: Record<string, keyof ParsedFlags> = {
   token: "token",
   env: "env",
   json: "json",
+  "max-items": "maxItems",
+  "max-pages": "maxPages",
 };
 
 // Reserved global flags that are bare booleans
@@ -37,6 +42,7 @@ const BOOL_FLAGS: Record<string, keyof ParsedFlags> = {
   "json-output": "jsonOutput",
   stream: "stream",
   "dry-run": "dryRun",
+  yes: "yes",
   help: "help",
 };
 
