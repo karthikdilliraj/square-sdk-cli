@@ -106,6 +106,23 @@ export function buildTree(client: object): NamespaceNode {
   return buildNode("root", client, seen, 0);
 }
 
+/**
+ * Walk the tree following `segments`, treating every segment as a namespace.
+ * Returns the final namespace node, or undefined if any segment is not one.
+ */
+export function findNamespace(
+  tree: NamespaceNode,
+  segments: string[]
+): NamespaceNode | undefined {
+  let current = tree;
+  for (const seg of segments) {
+    const child = current.children.get(seg);
+    if (!child) return undefined;
+    current = child;
+  }
+  return current;
+}
+
 export type ResolveResult =
   | { node: NamespaceNode; method: MethodEntry }
   | { error: string; validTokens: string[] };
@@ -153,6 +170,12 @@ export function resolvePath(
       ...current.methods.keys(),
       ...current.children.keys(),
     ];
+    if (current === tree) {
+      return {
+        error: `Unknown namespace "${methodName}". Valid options: ${validTokens.join(", ")}`,
+        validTokens,
+      };
+    }
     return {
       error: `Unknown method "${methodName}" on namespace "${current.name}". Valid: ${validTokens.join(", ")}`,
       validTokens,

@@ -8,7 +8,7 @@ import { buildRequest, readJsonArg } from "./merge.ts";
 import { load, save, setProfile, getProfile, listProfiles, useProfile } from "./config.ts";
 import { resolveAuth, parseEnvironment } from "./auth.ts";
 import { createClient as defaultCreateClient } from "./client.ts";
-import { buildTree, resolvePath } from "./introspect.ts";
+import { buildTree, findNamespace, resolvePath } from "./introspect.ts";
 import { execute } from "./execute.ts";
 import { print, renderError, bigIntReplacer } from "./output.ts";
 import { renderRootHelp, renderNamespaceHelp, renderMethodHelp } from "./help.ts";
@@ -45,43 +45,41 @@ export async function run(
     return runConfigCommand(positionals.slice(1), flags, stdout, stderr);
   }
 
-  // ---- Help (no auth required) ----
-  // Any --help renders help from a tree built with a dummy-token client
-  // (construction makes no network call).
-  if (flags.help) {
-    try {
-      const dummyClient = deps.createClient({ token: "dummy", environment: "sandbox" });
-      const tree = buildTree(dummyClient);
+  // ---- Help and command validation (no auth required) ----
+  // The SDK tree is built from a dummy-token client (construction makes no
+  // network call), so help and unknown-command errors never need credentials.
+  const shapeTree = buildTree(deps.createClient({ token: "dummy", environment: "sandbox" }));
 
-      if (positionals.length === 0) {
-        stdout(renderRootHelp(tree));
-        return 0;
-      }
-      if (positionals.length === 1) {
-        const nsNode = tree.children.get(positionals[0]!);
-        if (nsNode) {
-          stdout(renderNamespaceHelp(nsNode));
-          return 0;
-        }
-      } else {
-        const resolveResult = resolvePath(tree, positionals);
-        if (!("error" in resolveResult)) {
-          stdout(
-            renderMethodHelp(
-              positionals.slice(0, -1).join(" "),
-              resolveResult.method.name,
-              resolveResult.method.arity
-            )
-          );
-          return 0;
-        }
-      }
-      stdout(renderRootHelp(tree));
-      return 0;
-    } catch {
-      stdout("Square SDK CLI\n\nUse `square --help` for available namespaces.");
-      return 0;
+  if (positionals.length === 0) {
+    stdout(renderRootHelp(shapeTree));
+    return 0;
+  }
+
+  // Every positional is a namespace (e.g. `payments`, `terminal actions`): show its help
+  const nsNode = findNamespace(shapeTree, positionals);
+  if (nsNode) {
+    stdout(renderNamespaceHelp(nsNode, positionals.join(" ")));
+    return 0;
+  }
+
+  const shapeResult = resolvePath(shapeTree, positionals);
+  if (flags.help) {
+    if ("error" in shapeResult) {
+      stdout(renderRootHelp(shapeTree));
+    } else {
+      stdout(
+        renderMethodHelp(
+          positionals.slice(0, -1).join(" "),
+          shapeResult.method.name,
+          shapeResult.method.arity
+        )
+      );
     }
+    return 0;
+  }
+  if ("error" in shapeResult) {
+    stderr(`Error: ${shapeResult.error}`);
+    return 1;
   }
 
   // ---- API path ----
@@ -101,32 +99,10 @@ export async function run(
     return exitCode;
   }
 
-  // Create client
-  const client = deps.createClient(auth);
-
-  // Build tree
-  const tree = buildTree(client);
-
-  // Namespace-level help (no method given)
-  if (positionals.length === 1) {
-    const nsNode = tree.children.get(positionals[0]!);
-    if (nsNode) {
-      stdout(renderNamespaceHelp(nsNode));
-      return 0;
-    }
-  }
-
-  // Need at least 2 positionals for namespace + method
-  if (positionals.length < 2) {
-    stdout(renderRootHelp(tree));
-    return 0;
-  }
-
-  // Resolve path
-  const resolveResult = resolvePath(tree, positionals);
+  // Resolve the method again on the real, authenticated client
+  const resolveResult = resolvePath(buildTree(deps.createClient(auth)), positionals);
   if ("error" in resolveResult) {
     stderr(`Error: ${resolveResult.error}`);
-    stderr(`Valid options: ${resolveResult.validTokens.join(", ")}`);
     return 1;
   }
 

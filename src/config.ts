@@ -33,13 +33,52 @@ export async function load(): Promise<Config> {
   }
 
   const raw = fs.readFileSync(configPath, "utf8");
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(raw);
-    return parsed as Config;
+    parsed = JSON.parse(raw);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     throw new Error(`Failed to parse config at ${configPath}: ${msg}`);
   }
+  return validateConfig(parsed, configPath);
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+/**
+ * Check the parsed config's shape so a hand-edited file fails here with a
+ * clear message rather than later with an unrelated crash.
+ */
+function validateConfig(parsed: unknown, configPath: string): Config {
+  const fail = (problem: string): never => {
+    throw new Error(`Invalid config at ${configPath}: ${problem}`);
+  };
+
+  if (!isObject(parsed)) fail("expected a JSON object");
+  const cfg = parsed as Record<string, unknown>;
+
+  const profiles = cfg["profiles"] ?? {};
+  if (!isObject(profiles)) fail(`"profiles" must be an object`);
+
+  for (const [name, profile] of Object.entries(profiles as Record<string, unknown>)) {
+    if (!isObject(profile)) fail(`profile "${name}" must be an object`);
+    const p = profile as Record<string, unknown>;
+    if (typeof p["token"] !== "string" || p["token"] === "") {
+      fail(`profile "${name}" is missing a "token"`);
+    }
+    if (p["environment"] !== "sandbox" && p["environment"] !== "production") {
+      fail(`profile "${name}" has environment ${JSON.stringify(p["environment"])}; expected "sandbox" or "production"`);
+    }
+  }
+
+  const defaultProfile = cfg["defaultProfile"];
+  if (defaultProfile !== undefined && typeof defaultProfile !== "string") {
+    fail(`"defaultProfile" must be a string`);
+  }
+
+  return { ...cfg, profiles } as Config;
 }
 
 export async function save(cfg: Config): Promise<void> {

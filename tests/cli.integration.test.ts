@@ -254,3 +254,62 @@ describe("cli integration - environment validation", () => {
     expect(errOut.join("\n")).toMatch(/Invalid --env/);
   });
 });
+
+describe("cli integration - help and unknown commands without auth", () => {
+  beforeEach(() => {
+    delete process.env["SQUARE_ACCESS_TOKEN"];
+  });
+
+  it("no args shows root help, exit 0", async () => {
+    const output: string[] = [];
+    const exitCode = await run([], deps, (msg) => output.push(msg));
+    expect(exitCode).toBe(0);
+    expect(output.join("\n")).toMatch(/Namespaces:/);
+  });
+
+  it("namespace with no method shows namespace help without a token", async () => {
+    const output: string[] = [];
+    const errOut: string[] = [];
+    const exitCode = await run(["payments"], deps, (msg) => output.push(msg), (msg) => errOut.push(msg));
+    expect(exitCode).toBe(0);
+    expect(errOut).toEqual([]);
+    expect(output.join("\n")).toMatch(/Namespace: payments/);
+  });
+
+  it("nested namespace shows its help with the full path", async () => {
+    const output: string[] = [];
+    const exitCode = await run(["terminal", "actions"], deps, (msg) => output.push(msg));
+    expect(exitCode).toBe(0);
+    const combined = output.join("\n");
+    expect(combined).toMatch(/Namespace: terminal actions/);
+    expect(combined).toMatch(/terminal actions create/);
+  });
+
+  it("nested namespace --help shows namespace help, not root help", async () => {
+    const output: string[] = [];
+    const exitCode = await run(["terminal", "actions", "--help"], deps, (msg) => output.push(msg));
+    expect(exitCode).toBe(0);
+    expect(output.join("\n")).toMatch(/Namespace: terminal actions/);
+  });
+
+  it("unknown namespace exits 1 with an error instead of auth failure", async () => {
+    const errOut: string[] = [];
+    const exitCode = await run(["bogus"], deps, () => {}, (msg) => errOut.push(msg));
+    expect(exitCode).toBe(1);
+    expect(errOut.join("\n")).toMatch(/Unknown namespace "bogus"/);
+  });
+
+  it("unknown method exits 1 before checking auth", async () => {
+    const errOut: string[] = [];
+    const exitCode = await run(["payments", "nope"], deps, () => {}, (msg) => errOut.push(msg));
+    expect(exitCode).toBe(1);
+    expect(errOut.join("\n")).toMatch(/Unknown method "nope"/);
+  });
+
+  it("a valid method still requires auth", async () => {
+    const errOut: string[] = [];
+    const exitCode = await run(["payments", "list"], deps, () => {}, (msg) => errOut.push(msg));
+    expect(exitCode).toBe(1);
+    expect(errOut.join("\n")).toMatch(/No authentication found/);
+  });
+});

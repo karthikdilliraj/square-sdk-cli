@@ -54,6 +54,29 @@ describe("config - load", () => {
   });
 });
 
+describe("config - load validation", () => {
+  const cases: Array<[string, unknown, RegExp]> = [
+    ["top-level array", [], /expected a JSON object/],
+    ["profiles not an object", { profiles: "x" }, /"profiles" must be an object/],
+    ["profile missing token", { profiles: { p: { environment: "sandbox" } } }, /profile "p" is missing a "token"/],
+    ["bad environment", { profiles: { p: { token: "t", environment: "prod" } } }, /environment "prod"/],
+    ["defaultProfile not a string", { profiles: {}, defaultProfile: 1 }, /"defaultProfile" must be a string/],
+  ];
+
+  for (const [label, data, pattern] of cases) {
+    it(`rejects ${label}`, async () => {
+      fs.writeFileSync(tmpPath, JSON.stringify(data));
+      await expect(load()).rejects.toThrow(pattern);
+    });
+  }
+
+  it("treats a missing profiles key as empty", async () => {
+    fs.writeFileSync(tmpPath, "{}");
+    const cfg = await load();
+    expect(cfg.profiles).toEqual({});
+  });
+});
+
 describe("config - save", () => {
   it("writes config to file with mode 0600", async () => {
     const cfg = { profiles: { myprofile: { token: "tok", environment: "sandbox" as const } } };

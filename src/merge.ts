@@ -23,12 +23,20 @@ function coerce(value: string): unknown {
   }
 }
 
+/** Path segments that would reach Object.prototype instead of the request. */
+const FORBIDDEN_SEGMENTS = new Set(["__proto__", "constructor", "prototype"]);
+
 /**
  * Deep-set a value at a dot-separated path on an object.
  * Numeric path segments create array indices.
  */
 function deepSet(obj: Record<string, unknown>, path: string, value: unknown): void {
   const segments = path.split(".");
+  for (const seg of segments) {
+    if (FORBIDDEN_SEGMENTS.has(seg)) {
+      throw new Error(`Invalid field path "${path}": "${seg}" is not allowed`);
+    }
+  }
   let current: Record<string, unknown> = obj;
 
   for (let i = 0; i < segments.length - 1; i++) {

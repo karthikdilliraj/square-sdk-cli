@@ -49,15 +49,15 @@ export function renderRootHelp(tree: NamespaceNode): string {
 /**
  * Render namespace help: lists sub-namespaces and methods.
  */
-export function renderNamespaceHelp(node: NamespaceNode): string {
+export function renderNamespaceHelp(node: NamespaceNode, path: string = node.name): string {
   const lines: string[] = [];
-  lines.push(`Namespace: ${node.name}`);
+  lines.push(`Namespace: ${path}`);
   lines.push("");
 
   if (node.children.size > 0) {
     lines.push("Sub-namespaces:");
     for (const [name] of node.children) {
-      lines.push(`  ${node.name} ${name}`);
+      lines.push(`  ${path} ${name}`);
     }
     lines.push("");
   }
@@ -65,7 +65,7 @@ export function renderNamespaceHelp(node: NamespaceNode): string {
   if (node.methods.size > 0) {
     lines.push("Methods:");
     for (const [name, method] of node.methods) {
-      lines.push(`  ${node.name} ${name}  (arity: ${method.arity})`);
+      lines.push(`  ${path} ${name}  (arity: ${method.arity})`);
     }
     lines.push("");
   }

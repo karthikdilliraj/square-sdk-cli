@@ -124,3 +124,18 @@ describe("readJsonArg", () => {
     expect(() => readJsonArg("@missing.json", failing)).toThrow(/missing\.json.*ENOENT/);
   });
 });
+
+describe("buildRequest - field path guard", () => {
+  for (const seg of ["__proto__", "constructor", "prototype"]) {
+    it(`rejects "${seg}" in a field path`, () => {
+      expect(() => buildRequest(undefined, [{ path: `${seg}.polluted`, value: "1" }])).toThrow(
+        /not allowed/
+      );
+      expect(({} as any).polluted).toBeUndefined();
+    });
+  }
+
+  it("rejects a forbidden segment deeper in the path", () => {
+    expect(() => buildRequest(undefined, [{ path: "a.__proto__.b", value: "1" }])).toThrow(/not allowed/);
+  });
+});
