@@ -36,8 +36,10 @@ square config set sandbox --env sandbox      # prompts for the token (hidden)
 square config set prod --env production      # same
 pbpaste | square config set prod --token - --env production   # token from stdin
 square config use sandbox          # set default profile
-square config list
+square config list                 # * marks the default; shows each environment
 square config get sandbox          # token shown masked
+square config remove sandbox       # delete a profile (clears the default if it was)
+square whoami                      # check the token: merchant, environment, token source
 ```
 
 Omitting `--token` (or passing `--token -`) keeps the token out of your shell
@@ -123,6 +125,7 @@ cat payment.json | square payments create --json -
 
 ```bash
 bun test          # full suite (incl. SDK contract guard test)
+bun run typecheck # tsc --noEmit
 bun bin/square.ts <namespace> <method>
 ```
 

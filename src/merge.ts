@@ -4,11 +4,7 @@
 
 import * as fs from "fs";
 import { randomUUID } from "crypto";
-
-export interface FieldEntry {
-  path: string;
-  value: string;
-}
+import type { FieldEntry } from "./args.ts";
 
 /** Field path suffix that forces the value to stay a string (no JSON coercion). */
 const STRING_SUFFIX = ":str";

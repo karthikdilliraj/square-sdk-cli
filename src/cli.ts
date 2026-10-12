@@ -2,11 +2,11 @@
  * cli.ts - Main CLI entry point. Wires together all modules.
  */
 
-import { SquareClient, SquareError } from "square";
+import type { SquareClient } from "square";
 import { parseArgs } from "./args.ts";
 import { buildRequest, readJsonArg, ensureIdempotencyKey } from "./merge.ts";
-import { load, save, setProfile, getProfile, listProfiles, useProfile } from "./config.ts";
-import { resolveAuth, parseEnvironment } from "./auth.ts";
+import { load, setProfile, getProfile, useProfile, removeProfile } from "./config.ts";
+import { resolveAuth, parseEnvironment, type ResolvedAuth } from "./auth.ts";
 import { createClient as defaultCreateClient } from "./client.ts";
 import { buildTree, findNamespace, resolvePath, isReadOnlyMethod } from "./introspect.ts";
 import { execute } from "./execute.ts";
@@ -15,7 +15,7 @@ import { renderRootHelp, renderNamespaceHelp, renderMethodHelp } from "./help.ts
 import { terminalPrompter, type Prompter } from "./prompt.ts";
 
 export interface RunDeps {
-  createClient: (auth: { token: string; environment: "sandbox" | "production" }) => SquareClient;
+  createClient: (auth: Pick<ResolvedAuth, "token" | "environment">) => SquareClient;
   /** Terminal input (confirmations, hidden token entry, stdin). Defaults to the real terminal. */
   prompter?: Prompter;
 }
@@ -49,6 +49,15 @@ export async function run(
   // ---- Config subcommands (no auth required) ----
   if (positionals[0] === "config") {
     return runConfigCommand(positionals.slice(1), flags, prompter, stdout, stderr);
+  }
+
+  // ---- whoami (built-in, needs auth) ----
+  if (positionals[0] === "whoami") {
+    if (flags.help) {
+      stdout("Usage: square whoami [--profile <name>] [--json-output]\n\nShow the merchant, environment, and token source in use.");
+      return 0;
+    }
+    return runWhoami(deps, flags, stdout, stderr);
   }
 
   // ---- Help and command validation (no auth required) ----
@@ -91,18 +100,11 @@ export async function run(
   // ---- API path ----
 
   // Resolve auth
-  let auth: { token: string; environment: "sandbox" | "production" };
+  let auth: ResolvedAuth;
   try {
-    const config = await load();
-    const env = process.env as Record<string, string | undefined>;
-    auth = resolveAuth(
-      { profile: flags.profile, token: flags.token, env: flags.env },
-      env,
-      config
-    );
+    auth = await resolveAuthFromFlags(flags);
   } catch (e: unknown) {
-    const exitCode = renderError(e, { writeFn: stderr });
-    return exitCode;
+    return renderError(e, { writeFn: stderr });
   }
 
   // Resolve the method again on the real, authenticated client
@@ -189,6 +191,45 @@ export async function run(
   }
 }
 
+async function resolveAuthFromFlags(flags: ReturnType<typeof parseArgs>["flags"]): Promise<ResolvedAuth> {
+  const config = await load();
+  const env = process.env as Record<string, string | undefined>;
+  return resolveAuth({ profile: flags.profile, token: flags.token, env: flags.env }, env, config);
+}
+
+// ---- whoami ----
+
+async function runWhoami(
+  deps: RunDeps,
+  flags: ReturnType<typeof parseArgs>["flags"],
+  stdout: (msg: string) => void,
+  stderr: (msg: string) => void
+): Promise<number> {
+  try {
+    const auth = await resolveAuthFromFlags(flags);
+    const client = deps.createClient(auth);
+    const { merchant } = await client.merchants.get({ merchantId: "me" });
+    print(
+      {
+        environment: auth.environment,
+        tokenSource: auth.source,
+        merchant: {
+          id: merchant?.id,
+          businessName: merchant?.businessName,
+          country: merchant?.country,
+          currency: merchant?.currency,
+          status: merchant?.status,
+          mainLocationId: merchant?.mainLocationId,
+        },
+      },
+      { raw: flags.jsonOutput === true, writeFn: stdout }
+    );
+    return 0;
+  } catch (e: unknown) {
+    return renderError(e, { writeFn: stderr });
+  }
+}
+
 // ---- Config command router ----
 
 async function runConfigCommand(
@@ -259,16 +300,35 @@ async function runConfigCommand(
     }
 
     case "list": {
-      const names = await listProfiles();
+      const cfg = await load();
+      const names = Object.keys(cfg.profiles);
       if (names.length === 0) {
         stdout("No profiles configured.");
-      } else {
-        stdout("Profiles:");
-        for (const name of names) {
-          stdout(`  ${name}`);
-        }
+        return 0;
       }
+      const width = Math.max(...names.map((n) => n.length));
+      stdout("Profiles:");
+      for (const name of names) {
+        const marker = name === cfg.defaultProfile ? "*" : " ";
+        stdout(`${marker} ${name.padEnd(width)}  ${cfg.profiles[name]!.environment}`);
+      }
+      if (cfg.defaultProfile) stdout("\n(* = default)");
       return 0;
+    }
+
+    case "remove": {
+      const profileName = args[1];
+      if (!profileName) {
+        stderr("Usage: square config remove <profile>");
+        return 1;
+      }
+      try {
+        const wasDefault = await removeProfile(profileName);
+        stdout(`Profile "${profileName}" removed.${wasDefault ? " It was the default; no default is set now." : ""}`);
+        return 0;
+      } catch (e: unknown) {
+        return renderError(e, { writeFn: stderr });
+      }
     }
 
     case "use": {
@@ -287,7 +347,7 @@ async function runConfigCommand(
     }
 
     default: {
-      stderr(`Unknown config subcommand: "${subcommand}". Use set, get, list, or use.`);
+      stderr(`Unknown config subcommand: "${subcommand}". Use set, get, list, use, or remove.`);
       return 1;
     }
   }

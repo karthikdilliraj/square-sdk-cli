@@ -98,3 +98,22 @@ describe("resolveAuth - environment validation", () => {
     ).toThrow(/SQUARE_ENVIRONMENT/);
   });
 });
+
+describe("resolveAuth - token source", () => {
+  it("--profile", () => {
+    const cfg: Config = { profiles: { p: { token: "t", environment: "sandbox" } } };
+    expect(resolveAuth({ profile: "p" }, {}, cfg).source).toBe('profile "p"');
+  });
+
+  it("--token", () => {
+    expect(resolveAuth({ token: "t" }, { SQUARE_ACCESS_TOKEN: "e" }, baseConfig).source).toBe("--token");
+  });
+
+  it("SQUARE_ACCESS_TOKEN", () => {
+    expect(resolveAuth({}, { SQUARE_ACCESS_TOKEN: "e" }, baseConfig).source).toBe("SQUARE_ACCESS_TOKEN");
+  });
+
+  it("default profile", () => {
+    expect(resolveAuth({}, {}, configWithDefault).source).toBe('default profile "myprofile"');
+  });
+});

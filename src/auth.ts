@@ -13,6 +13,8 @@ export interface AuthFlags {
 export interface ResolvedAuth {
   token: string;
   environment: "sandbox" | "production";
+  /** Where the token came from, e.g. `profile "prod"` or `SQUARE_ACCESS_TOKEN`. */
+  source: string;
 }
 
 type EnvVars = Record<string, string | undefined>;
@@ -53,21 +55,25 @@ export function resolveAuth(
         `Profile "${flags.profile}" not found. Available profiles: ${Object.keys(config.profiles).join(", ") || "(none)"}`
       );
     }
-    return { token: profile.token, environment: profile.environment };
+    return { token: profile.token, environment: profile.environment, source: `profile "${flags.profile}"` };
   }
 
   // 2. --token flag or SQUARE_ACCESS_TOKEN
   const token = flags.token ?? env["SQUARE_ACCESS_TOKEN"];
   if (token) {
     const environment = resolveEnvironment(flags, env);
-    return { token, environment };
+    return { token, environment, source: flags.token ? "--token" : "SQUARE_ACCESS_TOKEN" };
   }
 
   // 3. Default profile
   if (config.defaultProfile) {
     const profile = config.profiles[config.defaultProfile];
     if (profile) {
-      return { token: profile.token, environment: profile.environment };
+      return {
+        token: profile.token,
+        environment: profile.environment,
+        source: `default profile "${config.defaultProfile}"`,
+      };
     }
   }
 

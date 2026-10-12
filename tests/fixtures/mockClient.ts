@@ -21,7 +21,7 @@ export class MockSquareError extends Error {
 // Fake Page (async-iterable) that spans two pages
 function makeFakePage(items: unknown[], pageSize = 2) {
   let page = 0;
-  const pages = [];
+  const pages: unknown[][] = [];
   for (let i = 0; i < items.length; i += pageSize) {
     pages.push(items.slice(i, i + pageSize));
   }
@@ -125,6 +125,23 @@ class MockLocationsClient {
   }
 }
 
+// ---- merchants namespace ----
+class MockMerchantsClient {
+  get(request: unknown) {
+    return Promise.resolve({
+      merchant: {
+        id: "M1",
+        businessName: "Test Cafe",
+        country: "US",
+        currency: "USD",
+        status: "ACTIVE",
+        mainLocationId: "L1",
+        languageCode: "en-US",
+      },
+    });
+  }
+}
+
 // ---- Root mock client ----
 class MockSquareClientProto {
   // Constructor should be skipped by introspect
@@ -140,6 +157,10 @@ class MockSquareClientProto {
 
   get locations(): MockLocationsClient {
     return new MockLocationsClient();
+  }
+
+  get merchants(): MockMerchantsClient {
+    return new MockMerchantsClient();
   }
 
   get terminal(): MockTerminalClient {

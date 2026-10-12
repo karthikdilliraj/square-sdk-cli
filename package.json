@@ -35,12 +35,11 @@
   "scripts": {
     "build": "bun scripts/build.ts",
     "test": "bun test",
-    "prepublishOnly": "bun run build && bun test"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "bun run typecheck && bun run build && bun test"
   },
   "devDependencies": {
-    "@types/bun": "latest"
-  },
-  "peerDependencies": {
+    "@types/bun": "^1.4.3",
     "typescript": "^5.9.3"
   },
   "dependencies": {

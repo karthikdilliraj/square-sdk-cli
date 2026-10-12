@@ -5,7 +5,7 @@
 import { SquareClient, SquareEnvironment } from "square";
 import type { ResolvedAuth } from "./auth.ts";
 
-export function createClient(auth: ResolvedAuth): SquareClient {
+export function createClient(auth: Pick<ResolvedAuth, "token" | "environment">): SquareClient {
   const environment =
     auth.environment === "production"
       ? SquareEnvironment.Production

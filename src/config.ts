@@ -115,3 +115,19 @@ export async function useProfile(name: string): Promise<void> {
   cfg.defaultProfile = name;
   await save(cfg);
 }
+
+/**
+ * Delete a profile. If it was the default, the default is cleared.
+ * Returns true when the removed profile was the default.
+ */
+export async function removeProfile(name: string): Promise<boolean> {
+  const cfg = await load();
+  if (!cfg.profiles[name]) {
+    throw new Error(`Profile "${name}" does not exist.`);
+  }
+  delete cfg.profiles[name];
+  const wasDefault = cfg.defaultProfile === name;
+  if (wasDefault) delete cfg.defaultProfile;
+  await save(cfg);
+  return wasDefault;
+}

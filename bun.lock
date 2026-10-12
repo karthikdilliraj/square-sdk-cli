@@ -5,13 +5,11 @@
     "": {
       "name": "square-sdk-cli",
       "dependencies": {
-        "square": "^44.1.0",
+        "square": "^44.2.1",
       },
       "devDependencies": {
-        "@types/bun": "latest",
-      },
-      "peerDependencies": {
-        "typescript": "^5",
+        "@types/bun": "^1.4.3",
+        "typescript": "^5.9.3",
       },
     },
   },

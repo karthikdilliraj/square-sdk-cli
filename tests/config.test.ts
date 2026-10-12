@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import { load, save, setProfile, getProfile, listProfiles, useProfile } from "../src/config";
+import { load, save, setProfile, getProfile, listProfiles, useProfile, removeProfile } from "../src/config";
 
 function makeTempConfigPath(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sq-cli-test-"));
@@ -150,5 +150,30 @@ describe("config - useProfile", () => {
 
   it("throws error for unknown profile", async () => {
     await expect(useProfile("unknown")).rejects.toThrow();
+  });
+});
+
+describe("config - removeProfile", () => {
+  it("deletes a non-default profile and keeps the default", async () => {
+    await setProfile("a", { token: "ta", environment: "sandbox" });
+    await setProfile("b", { token: "tb", environment: "sandbox" });
+    await useProfile("a");
+    expect(await removeProfile("b")).toBe(false);
+    const cfg = await load();
+    expect(Object.keys(cfg.profiles)).toEqual(["a"]);
+    expect(cfg.defaultProfile).toBe("a");
+  });
+
+  it("clears the default when the default is removed", async () => {
+    await setProfile("a", { token: "ta", environment: "sandbox" });
+    await useProfile("a");
+    expect(await removeProfile("a")).toBe(true);
+    const cfg = await load();
+    expect(cfg.profiles).toEqual({});
+    expect(cfg.defaultProfile).toBeUndefined();
+  });
+
+  it("throws for an unknown profile", async () => {
+    await expect(removeProfile("nope")).rejects.toThrow(/does not exist/);
   });
 });

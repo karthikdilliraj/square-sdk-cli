@@ -493,3 +493,110 @@ describe("cli integration - config set token sources", () => {
     expect(errOut.join("\n")).toMatch(/token is empty/);
   });
 });
+
+describe("cli integration - config list and remove", () => {
+  it("list marks the default and shows each environment", async () => {
+    await run(["config", "set", "sandbox", "--token", "t1", "--env", "sandbox"], deps, () => {});
+    await run(["config", "set", "prod", "--token", "t2", "--env", "production"], deps, () => {});
+    await run(["config", "use", "prod"], deps, () => {});
+    const output: string[] = [];
+    const exitCode = await run(["config", "list"], deps, (m) => output.push(m));
+    expect(exitCode).toBe(0);
+    expect(output).toContain("  sandbox  sandbox");
+    expect(output).toContain("* prod     production");
+    expect(output.join("\n")).toMatch(/\* = default/);
+  });
+
+  it("remove deletes the profile and notes when it was the default", async () => {
+    await run(["config", "set", "p", "--token", "t"], deps, () => {});
+    await run(["config", "use", "p"], deps, () => {});
+    const output: string[] = [];
+    const exitCode = await run(["config", "remove", "p"], deps, (m) => output.push(m));
+    expect(exitCode).toBe(0);
+    expect(output.join("\n")).toMatch(/removed.*was the default/);
+    const listOut: string[] = [];
+    await run(["config", "list"], deps, (m) => listOut.push(m));
+    expect(listOut).toEqual(["No profiles configured."]);
+  });
+
+  it("remove of an unknown profile exits 1", async () => {
+    const errOut: string[] = [];
+    const exitCode = await run(["config", "remove", "ghost"], deps, () => {}, (m) => errOut.push(m));
+    expect(exitCode).toBe(1);
+    expect(errOut.join("\n")).toMatch(/does not exist/);
+  });
+
+  it("remove without a name prints usage", async () => {
+    const errOut: string[] = [];
+    const exitCode = await run(["config", "remove"], deps, () => {}, (m) => errOut.push(m));
+    expect(exitCode).toBe(1);
+    expect(errOut.join("\n")).toMatch(/Usage: square config remove/);
+  });
+});
+
+describe("cli integration - whoami", () => {
+  it("shows merchant, environment, and token source", async () => {
+    const output: string[] = [];
+    const exitCode = await run(["whoami"], deps, (m) => output.push(m));
+    expect(exitCode).toBe(0);
+    expect(JSON.parse(output.join("\n"))).toEqual({
+      environment: "sandbox",
+      tokenSource: "SQUARE_ACCESS_TOKEN",
+      merchant: {
+        id: "M1",
+        businessName: "Test Cafe",
+        country: "US",
+        currency: "USD",
+        status: "ACTIVE",
+        mainLocationId: "L1",
+      },
+    });
+  });
+
+  it("asks the SDK for merchant \"me\"", async () => {
+    let requested: unknown;
+    const spyDeps = {
+      createClient: (_auth: any) => {
+        const m = createMockClient() as any;
+        const merchants = m.merchants;
+        const orig = merchants.get.bind(merchants);
+        merchants.get = (req: unknown) => {
+          requested = req;
+          return orig(req);
+        };
+        Object.defineProperty(m, "merchants", { get: () => merchants });
+        return m;
+      },
+    };
+    await run(["whoami"], spyDeps, () => {});
+    expect(requested).toEqual({ merchantId: "me" });
+  });
+
+  it("reports the profile as token source", async () => {
+    delete process.env["SQUARE_ACCESS_TOKEN"];
+    await run(["config", "set", "prod", "--token", "t", "--env", "production"], deps, () => {});
+    await run(["config", "use", "prod"], deps, () => {});
+    const output: string[] = [];
+    await run(["whoami", "--json-output"], deps, (m) => output.push(m));
+    expect(output.length).toBe(1);
+    const parsed = JSON.parse(output[0]!);
+    expect(parsed.environment).toBe("production");
+    expect(parsed.tokenSource).toBe('default profile "prod"');
+  });
+
+  it("without auth exits 1", async () => {
+    delete process.env["SQUARE_ACCESS_TOKEN"];
+    const errOut: string[] = [];
+    const exitCode = await run(["whoami"], deps, () => {}, (m) => errOut.push(m));
+    expect(exitCode).toBe(1);
+    expect(errOut.join("\n")).toMatch(/No authentication found/);
+  });
+
+  it("--help shows usage without auth", async () => {
+    delete process.env["SQUARE_ACCESS_TOKEN"];
+    const output: string[] = [];
+    const exitCode = await run(["whoami", "--help"], deps, (m) => output.push(m));
+    expect(exitCode).toBe(0);
+    expect(output.join("\n")).toMatch(/Usage: square whoami/);
+  });
+});
