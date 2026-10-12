@@ -17,13 +17,20 @@ export interface ResolvedAuth {
 
 type EnvVars = Record<string, string | undefined>;
 
+/**
+ * Validate an environment name. Throws on anything other than "sandbox" or
+ * "production" so a typo (e.g. "prod") never silently falls back to sandbox.
+ */
+export function parseEnvironment(value: string, source: string): "sandbox" | "production" {
+  if (value === "sandbox" || value === "production") return value;
+  throw new Error(`Invalid ${source} "${value}". Expected "sandbox" or "production".`);
+}
+
 function resolveEnvironment(flags: AuthFlags, env: EnvVars): "sandbox" | "production" {
   // --env flag takes precedence over env var
-  if (flags.env) {
-    return flags.env === "production" ? "production" : "sandbox";
-  }
+  if (flags.env !== undefined) return parseEnvironment(String(flags.env), "--env");
   const envVal = env["SQUARE_ENVIRONMENT"];
-  if (envVal === "production") return "production";
+  if (envVal) return parseEnvironment(envVal, "SQUARE_ENVIRONMENT");
   return "sandbox";
 }
 

@@ -71,9 +71,17 @@ square customers list --sortField DEFAULT --sortOrder ASC --stream
 
 ### Request body
 
-- `--json '<json>'` — full request body as JSON
+- `--json '<json>'` — full request body as a JSON object; `--json @body.json`
+  reads it from a file, `--json -` reads it from stdin
 - `--field.path value` — set a field by dotted path (merged over `--json`;
   numeric path segments create arrays; values are JSON-coerced, falling back to string)
+- `--field.path:str value` — same, but the value is always kept as a string
+  (e.g. `--address.postalCode:str 94103`, which would otherwise become a number)
+
+```bash
+square payments create --json @payment.json --dry-run   # preview, nothing sent
+cat payment.json | square payments create --json -
+```
 
 ### Flags
 
@@ -81,10 +89,11 @@ square customers list --sortField DEFAULT --sortOrder ASC --stream
 | --------------- | ------------------------------------------- |
 | `--profile <n>` | use a named profile from config             |
 | `--token <t>`   | Square API access token                     |
-| `--env <e>`     | `sandbox` or `production` (default sandbox) |
-| `--json '<j>'`  | JSON request body                           |
+| `--env <e>`     | `sandbox` or `production` (default sandbox; anything else is an error) |
+| `--json '<j>'`  | JSON request body (`@file` or `-` for stdin) |
 | `--json-output` | compact JSON output (no pretty print)       |
-| `--stream`      | stream pageable results item by item        |
+| `--stream`      | stream pageable results as NDJSON           |
+| `--dry-run`     | print the request without sending it        |
 | `--help`        | show help                                   |
 
 > Per-field help is structural only — the SDK's field schemas live in its

@@ -81,3 +81,20 @@ describe("resolveAuth - environment resolution", () => {
     expect(result.environment).toBe("production");
   });
 });
+
+describe("resolveAuth - environment validation", () => {
+  it("accepts --env production", () => {
+    const result = resolveAuth({ token: "t", env: "production" }, {}, baseConfig);
+    expect(result.environment).toBe("production");
+  });
+
+  it("rejects a mistyped --env instead of falling back to sandbox", () => {
+    expect(() => resolveAuth({ token: "t", env: "prod" }, {}, baseConfig)).toThrow(/Invalid --env "prod"/);
+  });
+
+  it("rejects an invalid SQUARE_ENVIRONMENT", () => {
+    expect(() =>
+      resolveAuth({ token: "t" }, { SQUARE_ENVIRONMENT: "Production" }, baseConfig)
+    ).toThrow(/SQUARE_ENVIRONMENT/);
+  });
+});

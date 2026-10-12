@@ -152,3 +152,105 @@ describe("cli integration - config subcommands (no auth required)", () => {
     expect(exitCode).toBe(1);
   });
 });
+
+describe("cli integration - output modes", () => {
+  it("--json-output prints compact JSON", async () => {
+    const output: string[] = [];
+    const exitCode = await run(["payments", "list", "--json-output"], deps, (msg) => output.push(msg));
+    expect(exitCode).toBe(0);
+    expect(output.length).toBe(1);
+    expect(output[0]).not.toContain("\n");
+    expect(JSON.parse(output[0]!)).toHaveLength(3);
+  });
+
+  it("--stream prints one compact JSON object per line", async () => {
+    const output: string[] = [];
+    const exitCode = await run(["payments", "list", "--stream"], deps, (msg) => output.push(msg));
+    expect(exitCode).toBe(0);
+    expect(output.length).toBe(3);
+    for (const line of output) {
+      expect(line).not.toContain("\n");
+      expect(JSON.parse(line).id).toMatch(/^pay/);
+    }
+  });
+});
+
+describe("cli integration - dry run", () => {
+  it("prints the request and does not call the API", async () => {
+    let called = false;
+    const spyDeps = {
+      createClient: (_auth: any) => {
+        const m = createMockClient() as any;
+        const p = m.payments;
+        p.create = () => {
+          called = true;
+        };
+        Object.defineProperty(m, "payments", { get: () => p });
+        return m;
+      },
+    };
+    const output: string[] = [];
+    const exitCode = await run(
+      ["payments", "create", "--amountMoney.amount", "100", "--dry-run"],
+      spyDeps,
+      (msg) => output.push(msg)
+    );
+    expect(exitCode).toBe(0);
+    expect(called).toBe(false);
+    const printed = JSON.parse(output.join("\n"));
+    expect(printed).toEqual({
+      dryRun: true,
+      environment: "sandbox",
+      method: "payments create",
+      request: { amountMoney: { amount: 100 } },
+    });
+  });
+});
+
+describe("cli integration - --json sources", () => {
+  it("reads the request body from @file", async () => {
+    const bodyPath = path.join(path.dirname(tmpConfigPath), "body.json");
+    fs.writeFileSync(bodyPath, '{"sourceId":"cnon:card"}');
+    const output: string[] = [];
+    const exitCode = await run(
+      ["payments", "create", "--json", `@${bodyPath}`, "--dry-run"],
+      deps,
+      (msg) => output.push(msg)
+    );
+    expect(exitCode).toBe(0);
+    expect(JSON.parse(output.join("\n")).request).toEqual({ sourceId: "cnon:card" });
+  });
+
+  it("missing @file exits 1 with a clear error", async () => {
+    const errOut: string[] = [];
+    const exitCode = await run(
+      ["payments", "create", "--json", "@/nonexistent/body.json"],
+      deps,
+      () => {},
+      (msg) => errOut.push(msg)
+    );
+    expect(exitCode).toBe(1);
+    expect(errOut.join("\n")).toMatch(/Cannot read --json file/);
+  });
+});
+
+describe("cli integration - environment validation", () => {
+  it("rejects a mistyped --env on API calls", async () => {
+    const errOut: string[] = [];
+    const exitCode = await run(["payments", "list", "--env", "prod"], deps, () => {}, (msg) => errOut.push(msg));
+    expect(exitCode).toBe(1);
+    expect(errOut.join("\n")).toMatch(/Invalid --env "prod"/);
+  });
+
+  it("config set rejects a mistyped --env", async () => {
+    const errOut: string[] = [];
+    const exitCode = await run(
+      ["config", "set", "p", "--token", "tok", "--env", "prod"],
+      deps,
+      () => {},
+      (msg) => errOut.push(msg)
+    );
+    expect(exitCode).toBe(1);
+    expect(errOut.join("\n")).toMatch(/Invalid --env/);
+  });
+});

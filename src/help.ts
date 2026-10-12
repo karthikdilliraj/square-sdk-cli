@@ -9,9 +9,10 @@ Global flags:
   --profile <name>      Use a named profile from config
   --token <token>       Square API access token
   --env <environment>   "sandbox" or "production" (default: sandbox)
-  --json <json>         JSON body for the request
+  --json <json>         JSON body for the request (@file or - for stdin)
   --json-output         Output as compact JSON (no pretty print)
-  --stream              Stream pageable results item by item
+  --stream              Stream pageable results as NDJSON (one item per line)
+  --dry-run             Print the request that would be sent, without sending it
   --help                Show this help message
 `.trim();
 
@@ -88,6 +89,8 @@ export function renderMethodHelp(namespaceName: string, methodName: string, arit
   lines.push("  --json '<json>'              Full request body as JSON");
   lines.push("  --<field.path> <value>       Set a field in the request by dotted path");
   lines.push(`                               e.g. --amountMoney.amount 100`);
+  lines.push("  --<field.path>:str <value>   Same, but keep the value a string (no JSON coercion)");
+  lines.push(`                               e.g. --address.postalCode:str 94103`);
   lines.push("");
   lines.push(`Note: arity hint = ${arity} (optional params may not be counted)`);
   lines.push("      Always pass a request object (even if empty).");

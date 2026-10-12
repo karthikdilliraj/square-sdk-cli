@@ -4,9 +4,9 @@
 
 import { SquareClient, SquareError } from "square";
 import { parseArgs } from "./args.ts";
-import { buildRequest } from "./merge.ts";
+import { buildRequest, readJsonArg } from "./merge.ts";
 import { load, save, setProfile, getProfile, listProfiles, useProfile } from "./config.ts";
-import { resolveAuth } from "./auth.ts";
+import { resolveAuth, parseEnvironment } from "./auth.ts";
 import { createClient as defaultCreateClient } from "./client.ts";
 import { buildTree, resolvePath } from "./introspect.ts";
 import { execute } from "./execute.ts";
@@ -133,10 +133,32 @@ export async function run(
   // Build request
   let request: object;
   try {
-    request = buildRequest(flags.json, fields);
+    if (flags.json !== undefined && typeof flags.json !== "string") {
+      throw new Error("--json requires a value: a JSON string, @file, or - for stdin");
+    }
+    request = buildRequest(
+      flags.json === undefined ? undefined : readJsonArg(flags.json),
+      fields
+    );
   } catch (e: unknown) {
     renderError(e, { writeFn: stderr });
     return 1;
+  }
+
+  const raw = flags.jsonOutput === true;
+
+  // Dry run: show what would be sent, without calling the API
+  if (flags.dryRun) {
+    print(
+      {
+        dryRun: true,
+        environment: auth.environment,
+        method: positionals.join(" "),
+        request,
+      },
+      { raw, writeFn: stdout }
+    );
+    return 0;
   }
 
   // Execute
@@ -145,13 +167,13 @@ export async function run(
     const result = execute(resolveResult.method, request, { stream: streamMode });
 
     if (streamMode) {
-      // Stream mode: async iterable
+      // Stream mode: one compact JSON object per line (NDJSON)
       for await (const item of result as AsyncIterable<unknown>) {
-        stdout(JSON.stringify(item, bigIntReplacer, 2));
+        stdout(JSON.stringify(item, bigIntReplacer));
       }
     } else {
       const value = await (result as Promise<unknown>);
-      print(value, { writeFn: stdout });
+      print(value, { raw, writeFn: stdout });
     }
 
     return 0;
@@ -181,7 +203,12 @@ async function runConfigCommand(
         stderr("Error: --token is required for config set");
         return 1;
       }
-      const environment = flags.env === "production" ? "production" : "sandbox";
+      let environment: "sandbox" | "production" = "sandbox";
+      try {
+        if (flags.env !== undefined) environment = parseEnvironment(String(flags.env), "--env");
+      } catch (e: unknown) {
+        return renderError(e, { writeFn: stderr });
+      }
       await setProfile(profileName, { token: flags.token, environment });
       stdout(`Profile "${profileName}" saved.`);
       return 0;

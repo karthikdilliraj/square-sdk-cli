@@ -41,9 +41,9 @@
     "@types/bun": "latest"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
-    "square": "^44.1.0"
+    "square": "^44.2.1"
   }
 }

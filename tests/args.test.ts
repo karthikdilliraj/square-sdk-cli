@@ -47,6 +47,12 @@ describe("parseArgs - reserved global flags", () => {
     expect(result.flags.jsonOutput).toBe(true);
   });
 
+  it("--dry-run bare flag becomes true", () => {
+    const result = parseArgs(["payments", "create", "--dry-run"]);
+    expect(result.flags.dryRun).toBe(true);
+    expect(result.fields).toEqual([]);
+  });
+
   it("--stream bare flag becomes true", () => {
     const result = parseArgs(["payments", "list", "--stream"]);
     expect(result.flags.stream).toBe(true);

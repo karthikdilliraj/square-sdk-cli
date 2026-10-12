@@ -9,6 +9,7 @@ export interface ParsedFlags {
   json?: string;
   jsonOutput?: true;
   stream?: true;
+  dryRun?: true;
   help?: true;
 }
 
@@ -35,6 +36,7 @@ const STRING_FLAGS: Record<string, keyof ParsedFlags> = {
 const BOOL_FLAGS: Record<string, keyof ParsedFlags> = {
   "json-output": "jsonOutput",
   stream: "stream",
+  "dry-run": "dryRun",
   help: "help",
 };
 

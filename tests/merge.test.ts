@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { buildRequest } from "../src/merge";
+import { buildRequest, readJsonArg } from "../src/merge";
 
 describe("buildRequest - json only", () => {
   it("parses json string into object", () => {
@@ -84,5 +84,43 @@ describe("buildRequest - deep merge (fields override json)", () => {
     ]);
     expect((result as any).existing).toBe("value");
     expect((result as any).new.nested.key).toBe("deep");
+  });
+});
+
+describe("buildRequest - validation and string escape", () => {
+  it("rejects a JSON array body", () => {
+    expect(() => buildRequest("[1,2]", [])).toThrow(/must be a JSON object/);
+  });
+
+  it("rejects a JSON string body", () => {
+    expect(() => buildRequest('"x"', [])).toThrow(/must be a JSON object/);
+  });
+
+  it(":str suffix keeps numeric-looking value as string", () => {
+    const result = buildRequest(undefined, [{ path: "address.postalCode:str", value: "94103" }]);
+    expect(result).toEqual({ address: { postalCode: "94103" } });
+  });
+});
+
+describe("readJsonArg", () => {
+  const fake = (source: string | 0) => (source === 0 ? "STDIN" : `FILE:${source}`);
+
+  it("returns inline JSON unchanged", () => {
+    expect(readJsonArg('{"a":1}', fake)).toBe('{"a":1}');
+  });
+
+  it("reads stdin for -", () => {
+    expect(readJsonArg("-", fake)).toBe("STDIN");
+  });
+
+  it("reads a file for @path", () => {
+    expect(readJsonArg("@body.json", fake)).toBe("FILE:body.json");
+  });
+
+  it("wraps file read errors with the path", () => {
+    const failing = () => {
+      throw new Error("ENOENT");
+    };
+    expect(() => readJsonArg("@missing.json", failing)).toThrow(/missing\.json.*ENOENT/);
   });
 });

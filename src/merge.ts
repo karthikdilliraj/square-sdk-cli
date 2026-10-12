@@ -2,10 +2,15 @@
  * merge.ts - Build a request object from a JSON string and field overrides.
  */
 
+import * as fs from "fs";
+
 export interface FieldEntry {
   path: string;
   value: string;
 }
+
+/** Field path suffix that forces the value to stay a string (no JSON coercion). */
+const STRING_SUFFIX = ":str";
 
 /**
  * Coerce a string value: try JSON.parse, fallback to raw string.
@@ -52,23 +57,49 @@ export function buildRequest(
   let base: Record<string, unknown> = {};
 
   if (jsonStr !== undefined) {
+    let parsed: unknown;
     try {
-      const parsed = JSON.parse(jsonStr);
-      if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
-        base = parsed as Record<string, unknown>;
-      } else {
-        base = parsed as Record<string, unknown>;
-      }
+      parsed = JSON.parse(jsonStr);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       throw new Error(`Invalid JSON: ${msg}`);
     }
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("Invalid JSON: request body must be a JSON object");
+    }
+    base = parsed as Record<string, unknown>;
   }
 
   for (const field of fields) {
-    const coerced = coerce(field.value);
-    deepSet(base, field.path, coerced);
+    if (field.path.endsWith(STRING_SUFFIX)) {
+      deepSet(base, field.path.slice(0, -STRING_SUFFIX.length), field.value);
+    } else {
+      deepSet(base, field.path, coerce(field.value));
+    }
   }
 
   return base;
+}
+
+/**
+ * Resolve the raw --json argument to JSON text:
+ *   "-"     => read stdin
+ *   "@path" => read the file at path
+ *   other   => used as-is
+ */
+export function readJsonArg(
+  raw: string,
+  readFile: (source: string | 0) => string = (source) => fs.readFileSync(source, "utf8")
+): string {
+  if (raw === "-") return readFile(0);
+  if (raw.startsWith("@")) {
+    const file = raw.slice(1);
+    try {
+      return readFile(file);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new Error(`Cannot read --json file "${file}": ${msg}`);
+    }
+  }
+  return raw;
 }
