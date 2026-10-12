@@ -1,5 +1,7 @@
 # square-sdk-cli
 
+[![CI](https://github.com/karthikdilliraj/square-sdk-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/karthikdilliraj/square-sdk-cli/actions/workflows/ci.yml)
+
 A command-line interface for the [Square API](https://developer.squareup.com/),
 built with [Bun](https://bun.com). It exposes **every** Square SDK namespace and
 method dynamically by introspecting the SDK at runtime — no hardcoded API list.

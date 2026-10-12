@@ -1,0 +1,23 @@
+name: Latest Square SDK
+
+# Weekly check that the CLI still works with the newest `square` release.
+# tests/contract.test.ts fails here first if the SDK's structure changes.
+on:
+  schedule:
+    - cron: "0 9 * * 1" # Mondays 09:00 UTC
+  workflow_dispatch:
+
+jobs:
+  test-latest-sdk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install
+      - name: Upgrade square to latest (CI only, not committed)
+        run: bun add square@latest
+      - run: bun pm ls | grep square
+      - run: bun run typecheck
+      - run: bun test
