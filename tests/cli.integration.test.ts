@@ -516,6 +516,63 @@ describe("cli integration - auto idempotency key", () => {
   });
 });
 
+describe("cli integration - raw page mode", () => {
+  it("prints one page envelope with its cursor", async () => {
+    const output: string[] = [];
+    const exitCode = await run(
+      ["payments", "list", "--raw-page", "--json-output"],
+      deps,
+      (msg) => output.push(msg)
+    );
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(output[0]!);
+    expect(parsed.data.map((p: any) => p.id)).toEqual(["pay1", "pay2"]);
+    expect(parsed.cursor).toBe("cursor-1");
+  });
+
+  it("rejects --raw-page combined with --stream", async () => {
+    const errOut: string[] = [];
+    const exitCode = await run(
+      ["payments", "list", "--raw-page", "--stream"],
+      deps,
+      () => {},
+      (msg) => errOut.push(msg)
+    );
+    expect(exitCode).toBe(1);
+    expect(errOut.join("\n")).toMatch(/cannot be combined with --stream/);
+  });
+});
+
+describe("cli integration - verbose", () => {
+  it("reports the call and duration on stderr while stdout stays JSON", async () => {
+    const output: string[] = [];
+    const errOut: string[] = [];
+    const exitCode = await run(
+      ["payments", "list", "--verbose", "--json-output"],
+      deps,
+      (msg) => output.push(msg),
+      (msg) => errOut.push(msg)
+    );
+    expect(exitCode).toBe(0);
+    expect(JSON.parse(output[0]!)).toHaveLength(3);
+    const stderrText = errOut.join("\n");
+    expect(stderrText).toMatch(/→ payments list \(sandbox; auth: SQUARE_ACCESS_TOKEN\)/);
+    expect(stderrText).toMatch(/← done in \d+ ms/);
+  });
+
+  it("counts streamed items", async () => {
+    const errOut: string[] = [];
+    const exitCode = await run(
+      ["payments", "list", "--verbose", "--stream"],
+      deps,
+      () => {},
+      (msg) => errOut.push(msg)
+    );
+    expect(exitCode).toBe(0);
+    expect(errOut.join("\n")).toMatch(/← 3 items in \d+ ms/);
+  });
+});
+
 describe("cli integration - production write confirmation", () => {
   beforeEach(() => {
     process.env["SQUARE_ENVIRONMENT"] = "production";

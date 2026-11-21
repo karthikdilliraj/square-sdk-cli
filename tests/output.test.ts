@@ -83,3 +83,71 @@ describe("renderError", () => {
     expect(out).toContain("INVALID_ENUM_VALUE");
   });
 });
+
+describe("renderError - request id", () => {
+  test("prints the request id from response headers", () => {
+    const err = new SquareError({
+      statusCode: 400,
+      body: { errors: [{ category: "INVALID_REQUEST_ERROR", code: "BAD_REQUEST", detail: "nope" }] },
+      rawResponse: { headers: new Headers({ "request-id": "req-header" }) } as any,
+    });
+    expect(capture(err).lines.join("\n")).toContain("request id: req-header");
+  });
+
+  test("falls back to request_id echoed in the body", () => {
+    const err = new SquareError({
+      statusCode: 400,
+      body: {
+        errors: [{ category: "INVALID_REQUEST_ERROR", code: "BAD_REQUEST" }],
+        request_id: "req-body",
+      },
+    });
+    expect(capture(err).lines.join("\n")).toContain("request id: req-body");
+  });
+
+  test("omits the line when no request id is available", () => {
+    const err = new SquareError({ statusCode: 500, body: {} });
+    expect(capture(err).lines.join("\n")).not.toContain("request id");
+  });
+});
+
+describe("renderError - verbose", () => {
+  function verboseCapture(err: unknown): string {
+    const lines: string[] = [];
+    renderError(err, { writeFn: (m) => lines.push(m), verbose: true });
+    return lines.join("\n");
+  }
+
+  test("prints the raw error body", () => {
+    const err = new SquareError({
+      statusCode: 400,
+      body: { errors: [{ category: "INVALID_REQUEST_ERROR", code: "BAD_REQUEST" }] },
+    });
+    const out = verboseCapture(err);
+    expect(out).toContain("body:");
+    expect(out).toContain('"errors"');
+  });
+
+  test("keeps the raw body out of non-verbose output", () => {
+    const err = new SquareError({
+      statusCode: 400,
+      body: { errors: [{ category: "INVALID_REQUEST_ERROR", code: "BAD_REQUEST" }] },
+    });
+    expect(capture(err).lines.join("\n")).not.toContain("body:");
+  });
+
+  test("prints the underlying cause", () => {
+    const err = new SquareError({
+      statusCode: 500,
+      body: {},
+      cause: new Error("socket hang up"),
+    });
+    expect(verboseCapture(err)).toContain("cause: socket hang up");
+  });
+
+  test("prints a stack trace for plain errors", () => {
+    const out = verboseCapture(new Error("boom"));
+    expect(out).toContain("boom");
+    expect(out).toMatch(/\n {2}at /);
+  });
+});

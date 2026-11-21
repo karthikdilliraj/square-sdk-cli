@@ -28,10 +28,13 @@ function makeFakePage(items: unknown[], pageSize = 2) {
 
   function makeSinglePage(idx: number): any {
     const pageData = pages[idx] ?? [];
+    const hasNext = idx + 1 < pages.length;
     return {
       data: pageData,
+      // Mirrors the SDK's Page.response: the parsed API envelope incl. cursor.
+      response: { data: pageData, ...(hasNext ? { cursor: `cursor-${idx + 1}` } : {}) },
       hasNextPage() {
-        return idx + 1 < pages.length;
+        return hasNext;
       },
       getNextPage() {
         return Promise.resolve(makeSinglePage(idx + 1));

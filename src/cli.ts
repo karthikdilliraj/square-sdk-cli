@@ -132,6 +132,9 @@ export async function run(
   try {
     maxItems = parseLimit(flags.maxItems, "--max-items");
     maxPages = parseLimit(flags.maxPages, "--max-pages");
+    if (flags.rawPage && flags.stream) {
+      throw new Error("--raw-page cannot be combined with --stream");
+    }
     if (flags.json !== undefined && typeof flags.json !== "string") {
       throw new Error("--json requires a value: a JSON string, @file, or - for stdin");
     }
@@ -183,23 +186,36 @@ export async function run(
   if (generatedKey) stderr(`Using idempotencyKey ${generatedKey} (pass --idempotencyKey to retry safely)`);
 
   // Execute
+  const verbose = flags.verbose === true;
+  const streamMode = flags.stream === true;
+  const startedAt = Date.now();
+  if (verbose) stderr(`→ ${positionals.join(" ")} (${auth.environment}; auth: ${auth.source})`);
+
   try {
-    const streamMode = flags.stream === true;
-    const result = execute(resolveResult.method, request, { stream: streamMode, maxItems, maxPages });
+    const result = execute(resolveResult.method, request, {
+      stream: streamMode,
+      rawPage: flags.rawPage === true,
+      maxItems,
+      maxPages,
+    });
 
     if (streamMode) {
       // Stream mode: one compact JSON object per line (NDJSON)
+      let count = 0;
       for await (const item of result as AsyncIterable<unknown>) {
         stdout(JSON.stringify(item, bigIntReplacer));
+        count++;
       }
+      if (verbose) stderr(`← ${count} item${count === 1 ? "" : "s"} in ${Date.now() - startedAt} ms`);
     } else {
       const value = await (result as Promise<unknown>);
       print(value, { raw, writeFn: stdout });
+      if (verbose) stderr(`← done in ${Date.now() - startedAt} ms`);
     }
 
     return 0;
   } catch (e: unknown) {
-    return renderError(e, { writeFn: stderr });
+    return renderError(e, { writeFn: stderr, verbose });
   }
 }
 
@@ -238,7 +254,7 @@ async function runWhoami(
     );
     return 0;
   } catch (e: unknown) {
-    return renderError(e, { writeFn: stderr });
+    return renderError(e, { writeFn: stderr, verbose: flags.verbose === true });
   }
 }
 

@@ -24,6 +24,13 @@ All notable changes to this project are documented here. The format follows
 
 - `square --version` prints the CLI and Square SDK versions (with
   `--json-output`, as JSON).
+- `--raw-page` returns a single page's raw API response envelope, cursor
+  included, instead of flattening every page. Pair it with `--cursor <c>` to
+  resume where the previous page stopped; it is rejected together with
+  `--stream`.
+- `--verbose` prints the call, environment, auth source and duration to stderr,
+  and on failure the raw error body, cause and stack trace.
+- Square API errors now print the API's `request id` when it is available.
 
 ## [0.2.0] - 2026-10-12
 

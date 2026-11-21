@@ -66,6 +66,42 @@ describe("execute - stream mode", () => {
   });
 });
 
+describe("execute - raw page mode", () => {
+  it("returns one page's response envelope, including the cursor", async () => {
+    const result = (await execute(getMethod("payments", "list"), {}, { rawPage: true })) as any;
+    expect(result.data.map((p: any) => p.id)).toEqual(["pay1", "pay2"]);
+    expect(result.cursor).toBe("cursor-1");
+  });
+
+  it("does not follow further pages", async () => {
+    const result = (await execute(getMethod("payments", "list"), {}, { rawPage: true })) as any;
+    // The mock has 3 items across 2 pages; a single page has at most 2.
+    expect(result.data.length).toBe(2);
+  });
+
+  it("returns non-pageable results as-is", async () => {
+    const result = (await execute(getMethod("locations", "list"), {}, { rawPage: true })) as any;
+    expect(result.locations[0].id).toBe("L1");
+  });
+
+  it("falls back to a data envelope for pages without a response object", async () => {
+    const method = {
+      name: "list",
+      arity: 1,
+      fn: async () => ({
+        data: [{ id: "x" }],
+        hasNextPage: () => false,
+        getNextPage: async () => null,
+        [Symbol.asyncIterator]: async function* () {
+          yield { id: "x" };
+        },
+      }),
+    };
+    const result = (await execute(method as any, {}, { rawPage: true })) as any;
+    expect(result).toEqual({ data: [{ id: "x" }] });
+  });
+});
+
 describe("execute - error propagation", () => {
   it("SquareError thrown by method surfaces from execute", async () => {
     const method = getMethod("payments", "throwingMethod");

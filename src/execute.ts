@@ -10,6 +10,11 @@ export interface ExecuteOptions {
   maxItems?: number;
   /** Stop after fetching this many pages. */
   maxPages?: number;
+  /**
+   * Return one page's raw API response envelope (including its cursor) instead
+   * of flattening every page into an item array. No further pages are fetched.
+   */
+  rawPage?: boolean;
 }
 
 type PageLike = {
@@ -65,7 +70,21 @@ async function collectPages(firstPage: PageLike, options: ExecuteOptions): Promi
 }
 
 /**
+ * The API response envelope for a page, so callers can see `cursor` and other
+ * top-level fields. The SDK keeps the parsed response on `page.response`; fall
+ * back to an item array for page-like objects that don't expose it.
+ */
+function pageEnvelope(page: PageLike): unknown {
+  const response = (page as { response?: unknown }).response;
+  if (response !== null && typeof response === "object") return response;
+  return { data: page.data };
+}
+
+/**
  * Execute a method.
+ *
+ * When rawPage=true: returns Promise<unknown> of a single page's response
+ *   envelope (or the plain result for non-pageable methods). No auto-paging.
  *
  * When stream=true: returns an AsyncGenerator directly (not wrapped in Promise).
  *   Use: `for await (const item of execute(method, req, {stream:true}))`
@@ -82,6 +101,13 @@ export function execute(
   request: object,
   options: ExecuteOptions
 ): AsyncGenerator<unknown> | Promise<unknown> {
+  if (options.rawPage) {
+    return (async () => {
+      const result = await Promise.resolve(method.fn(request));
+      return isPage(result) ? pageEnvelope(result) : result;
+    })();
+  }
+
   if (options.stream) {
     return (async function* () {
       const result = await Promise.resolve(method.fn(request));

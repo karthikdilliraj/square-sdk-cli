@@ -12,10 +12,12 @@ Global flags:
   --json <json>         JSON body for the request (@file or - for stdin)
   --json-output         Output as compact JSON (no pretty print)
   --stream              Stream pageable results as NDJSON (one item per line)
+  --raw-page            Return a single raw page (with its cursor) instead of auto-paging
   --dry-run             Print the request that would be sent, without sending it
   --max-items <n>       Stop paging after n items
   --max-pages <n>       Stop paging after n pages
   --yes                 Skip the confirmation for write calls in production
+  --verbose             Print request diagnostics and full error details to stderr
   --version             Print the CLI and Square SDK versions
   --help                Show this help message
 `.trim();

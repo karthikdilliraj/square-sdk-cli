@@ -11,8 +11,10 @@ export interface ParsedFlags {
   maxPages?: string;
   jsonOutput?: true;
   stream?: true;
+  rawPage?: true;
   dryRun?: true;
   yes?: true;
+  verbose?: true;
   help?: true;
   version?: true;
 }
@@ -42,8 +44,10 @@ const STRING_FLAGS: Record<string, keyof ParsedFlags> = {
 const BOOL_FLAGS: Record<string, keyof ParsedFlags> = {
   "json-output": "jsonOutput",
   stream: "stream",
+  "raw-page": "rawPage",
   "dry-run": "dryRun",
   yes: "yes",
+  verbose: "verbose",
   help: "help",
   version: "version",
 };

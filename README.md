@@ -95,6 +95,28 @@ square payments create --json @payment.json --dry-run   # preview, nothing sent
 cat payment.json | square payments create --json -
 ```
 
+### Pagination and cursors
+
+By default `list` calls fetch every page and print one flattened array (cap it
+with `--max-items`/`--max-pages`), and `--stream` emits one item per line as
+NDJSON. To work page by page, `--raw-page` returns a single page's API response
+envelope — cursor included — without fetching any further pages:
+
+```bash
+square payments list --raw-page --limit 100
+square payments list --raw-page --limit 100 --cursor <cursor-from-previous-page>
+```
+
+`--raw-page` cannot be combined with `--stream`, and `--max-items`/`--max-pages`
+don't apply to it.
+
+### Diagnosing calls
+
+`--verbose` prints the call, environment, auth source and duration to stderr,
+and on failure includes the raw error body, underlying cause, and stack trace.
+Square API errors always print the API's `request id` when it is available —
+include it when asking Square support about a call.
+
 ### Flags
 
 | Flag            | Description                                 |
@@ -105,10 +127,12 @@ cat payment.json | square payments create --json -
 | `--json '<j>'`  | JSON request body (`@file` or `-` for stdin) |
 | `--json-output` | compact JSON output (no pretty print)       |
 | `--stream`      | stream pageable results as NDJSON           |
+| `--raw-page`    | return one raw page (with its cursor) instead of auto-paging |
 | `--dry-run`     | print the request without sending it (no idempotency key is generated) |
 | `--max-items <n>` | stop paging after n items                 |
 | `--max-pages <n>` | stop paging after n pages                 |
 | `--yes`         | skip the production write confirmation      |
+| `--verbose`     | request diagnostics and full error details on stderr |
 | `--version`     | print the CLI and Square SDK versions       |
 | `--help`        | show help                                   |
 

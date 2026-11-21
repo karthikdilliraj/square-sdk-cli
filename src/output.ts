@@ -25,6 +25,43 @@ export function print(value: unknown, options: PrintOptions = {}): void {
 
 export interface RenderErrorOptions {
   writeFn?: (msg: string) => void;
+  /** Also print the raw error body, cause, or stack. */
+  verbose?: boolean;
+}
+
+/** Headers Square has used for the request id, in order of preference. */
+const REQUEST_ID_HEADERS = [
+  "request-id",
+  "x-request-id",
+  "square-request-id",
+  "x-square-request-id",
+];
+
+/**
+ * Extract Square's request id from an error, which support uses to trace a
+ * call. It usually arrives as a response header; some APIs also echo it in the
+ * body as `request_id` / `requestId`.
+ */
+export function getRequestId(err: SquareError): string | undefined {
+  const body = err.body as
+    | { request_id?: unknown; requestId?: unknown }
+    | null
+    | undefined;
+  for (const key of ["request_id", "requestId"] as const) {
+    const value = body?.[key];
+    if (typeof value === "string" && value) return value;
+  }
+
+  const headers = err.rawResponse as
+    | { headers?: { get?: (name: string) => string | null } }
+    | undefined;
+  if (headers?.headers?.get) {
+    for (const name of REQUEST_ID_HEADERS) {
+      const value = headers.headers.get(name);
+      if (value) return value;
+    }
+  }
+  return undefined;
 }
 
 /** Human-readable reason phrases for the HTTP status codes Square returns. */
@@ -105,6 +142,9 @@ export function renderError(err: unknown, options: RenderErrorOptions = {}): num
       : "request failed";
     write(`✗ Square API request failed (${statusText})`);
 
+    const requestId = getRequestId(err);
+    if (requestId) write(`  request id: ${requestId}`);
+
     const errors = (err.errors ?? []) as SquareBodyError[];
     for (const e of errors) {
       write("");
@@ -115,11 +155,34 @@ export function renderError(err: unknown, options: RenderErrorOptions = {}): num
       const hint = hintFor(e);
       if (hint) write(`    hint:  ${hint}`);
     }
+
+    if (options.verbose) {
+      if (err.body !== undefined) {
+        write("");
+        write("  body:");
+        for (const line of prettyJson(err.body)) write(`    ${line}`);
+      }
+      if (err.cause !== undefined) {
+        write(`  cause: ${err.cause instanceof Error ? err.cause.message : String(err.cause)}`);
+      }
+    }
   } else if (err instanceof Error) {
     write(`✗ Error: ${err.message}`);
+    if (options.verbose && err.stack) {
+      for (const line of err.stack.split("\n").slice(1)) write(`  ${line.trim()}`);
+    }
   } else {
     write(`✗ Error: ${String(err)}`);
   }
 
   return 1;
+}
+
+/** Pretty-print a value, falling back to a string if it can't be serialized. */
+function prettyJson(value: unknown): string[] {
+  try {
+    return JSON.stringify(value, bigIntReplacer, 2).split("\n");
+  } catch {
+    return [String(value)];
+  }
 }
