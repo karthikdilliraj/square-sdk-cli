@@ -603,6 +603,124 @@ describe("cli integration - verbose", () => {
   });
 });
 
+describe("cli integration - transport flags", () => {
+  function capturingClient() {
+    const options: unknown[] = [];
+    return {
+      options,
+      deps: {
+        createClient: (_auth: any, opts?: unknown) => {
+          options.push(opts);
+          return createMockClient() as any;
+        },
+      },
+    };
+  }
+
+  it("passes --timeout and --retry to the client", async () => {
+    const spy = capturingClient();
+    const exitCode = await run(["payments", "list", "--timeout", "5", "--retry", "0"], spy.deps, () => {});
+    expect(exitCode).toBe(0);
+    expect(spy.options.at(-1)).toEqual({ timeoutInSeconds: 5, maxRetries: 0 });
+  });
+
+  it("passes no transport options by default", async () => {
+    const spy = capturingClient();
+    await run(["payments", "list"], spy.deps, () => {});
+    expect(spy.options.at(-1)).toEqual({});
+  });
+
+  it("rejects an invalid --timeout before checking auth", async () => {
+    delete process.env["SQUARE_ACCESS_TOKEN"];
+    const errOut: string[] = [];
+    const exitCode = await run(
+      ["payments", "list", "--timeout", "soon"],
+      deps,
+      () => {},
+      (msg) => errOut.push(msg)
+    );
+    expect(exitCode).toBe(1);
+    expect(errOut.join("\n")).toMatch(/--timeout must be a positive number/);
+    expect(errOut.join("\n")).not.toMatch(/No authentication/);
+  });
+
+  it("rejects a negative --retry", async () => {
+    const errOut: string[] = [];
+    const exitCode = await run(
+      ["payments", "list", "--retry", "-1"],
+      deps,
+      () => {},
+      (msg) => errOut.push(msg)
+    );
+    expect(exitCode).toBe(1);
+    expect(errOut.join("\n")).toMatch(/--retry must be a non-negative integer/);
+  });
+});
+
+describe("cli integration - typo suggestions", () => {
+  it("suggests a namespace", async () => {
+    const errOut: string[] = [];
+    const exitCode = await run(["paymets"], deps, () => {}, (msg) => errOut.push(msg));
+    expect(exitCode).toBe(1);
+    expect(errOut.join("\n")).toMatch(
+      /Unknown namespace "paymets"\. Did you mean "payments"\?/
+    );
+  });
+
+  it("suggests a method", async () => {
+    const errOut: string[] = [];
+    await run(["payments", "lst"], deps, () => {}, (msg) => errOut.push(msg));
+    expect(errOut.join("\n")).toMatch(/Did you mean "list"\?/);
+  });
+});
+
+describe("cli integration - search", () => {
+  beforeEach(() => {
+    delete process.env["SQUARE_ACCESS_TOKEN"];
+  });
+
+  it("finds namespaces by partial name without auth", async () => {
+    const output: string[] = [];
+    const exitCode = await run(["search", "paym"], deps, (msg) => output.push(msg));
+    expect(exitCode).toBe(0);
+    expect(output).toContain("payments");
+  });
+
+  it("finds methods across namespaces", async () => {
+    const output: string[] = [];
+    await run(["search", "list"], deps, (msg) => output.push(msg));
+    expect(output).toContain("payments list");
+    expect(output).toContain("terminal actions list");
+  });
+
+  it("matches a multi-word path", async () => {
+    const output: string[] = [];
+    await run(["search", "terminal actions"], deps, (msg) => output.push(msg));
+    expect(output[0]).toBe("terminal actions");
+  });
+
+  it("reports when nothing matches", async () => {
+    const output: string[] = [];
+    const exitCode = await run(["search", "zzzzz"], deps, (msg) => output.push(msg));
+    expect(exitCode).toBe(0);
+    expect(output.join("\n")).toMatch(/No matches for "zzzzz"/);
+  });
+
+  it("requires a term", async () => {
+    const errOut: string[] = [];
+    const exitCode = await run(["search"], deps, () => {}, (msg) => errOut.push(msg));
+    expect(exitCode).toBe(1);
+    expect(errOut.join("\n")).toMatch(/Usage: square search/);
+  });
+
+  it("--help explains the command", async () => {
+    const output: string[] = [];
+    const exitCode = await run(["search", "--help"], deps, (msg) => output.push(msg));
+    expect(exitCode).toBe(0);
+    expect(output.join("\n")).toMatch(/square search "terminal actions"/);
+  });
+});
+
 describe("cli integration - production write confirmation", () => {
   beforeEach(() => {
     process.env["SQUARE_ENVIRONMENT"] = "production";

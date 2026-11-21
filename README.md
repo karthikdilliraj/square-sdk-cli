@@ -67,6 +67,8 @@ square <namespace> [<sub-namespace>...] <method> [--json '<body>'] [--field.path
 square --help
 square payments --help
 square terminal actions create --help
+square search payment            # find namespaces/methods by name
+square search "terminal actions" # multi-word terms match a path
 
 # Call methods
 square locations list
@@ -97,9 +99,9 @@ square customers list --sortField DEFAULT --sortOrder ASC --stream
   method name
 
 A field whose name matches a global flag (`token`, `env`, `json`, `profile`,
-`stream`, `raw-page`, `dry-run`, `max-items`, `max-pages`, `yes`, `verbose`,
-`json-output`, `help`, `version`) can't be set with `--name`; pass it through
-`--json` instead.
+`stream`, `raw-page`, `dry-run`, `max-items`, `max-pages`, `timeout`, `retry`,
+`yes`, `verbose`, `json-output`, `help`, `version`) can't be set with `--name`;
+pass it through `--json` instead.
 
 ```bash
 square payments create --json @payment.json --dry-run   # preview, nothing sent
@@ -128,6 +130,9 @@ and on failure includes the raw error body, underlying cause, and stack trace.
 Square API errors always print the API's `request id` when it is available —
 include it when asking Square support about a call.
 
+Unknown namespace and method names suggest the closest match
+(`Did you mean "payments"?`) instead of dumping hundreds of valid names.
+
 ### Flags
 
 | Flag            | Description                                 |
@@ -142,6 +147,8 @@ include it when asking Square support about a call.
 | `--dry-run`     | print the request without sending it (no idempotency key is generated) |
 | `--max-items <n>` | stop paging after n items                 |
 | `--max-pages <n>` | stop paging after n pages                 |
+| `--timeout <seconds>` | HTTP timeout per request (SDK default if omitted) |
+| `--retry <n>`   | retry failed requests n times (SDK default 2; 0 disables) |
 | `--yes`         | skip the production write confirmation      |
 | `--verbose`     | request diagnostics and full error details on stderr |
 | `--version`     | print the CLI and Square SDK versions       |

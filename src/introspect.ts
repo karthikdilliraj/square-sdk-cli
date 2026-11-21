@@ -127,6 +127,55 @@ export type ResolveResult =
   | { node: NamespaceNode; method: MethodEntry }
   | { error: string; validTokens: string[] };
 
+/** Levenshtein distance between two strings. */
+function editDistance(a: string, b: string): number {
+  if (a === b) return 0;
+  const row = new Array<number>(b.length + 1);
+  for (let j = 0; j <= b.length; j++) row[j] = j;
+
+  for (let i = 1; i <= a.length; i++) {
+    let diagonal = row[0]!;
+    row[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const previous = row[j]!;
+      row[j] = Math.min(
+        previous + 1, // deletion
+        row[j - 1]! + 1, // insertion
+        diagonal + (a[i - 1] === b[j - 1] ? 0 : 1) // substitution
+      );
+      diagonal = previous;
+    }
+  }
+  return row[b.length]!;
+}
+
+/**
+ * Best "did you mean" candidate for a mistyped token: a prefix of it, or a
+ * close edit distance. Ties resolve alphabetically so output is stable.
+ */
+export function suggestToken(token: string, candidates: Iterable<string>): string | undefined {
+  const needle = token.toLowerCase();
+  if (!needle) return undefined;
+  const maxDistance = needle.length <= 4 ? 1 : 2;
+  let best: { name: string; score: number } | undefined;
+
+  for (const candidate of candidates) {
+    const name = candidate.toLowerCase();
+    let score: number | undefined;
+    if (name === needle) score = 0;
+    else if (needle.length >= 3 && name.startsWith(needle)) score = 1;
+    else {
+      const distance = editDistance(needle, name);
+      if (distance <= maxDistance) score = 10 + distance;
+    }
+    if (score === undefined) continue;
+    if (!best || score < best.score || (score === best.score && candidate < best.name)) {
+      best = { name: candidate, score };
+    }
+  }
+  return best?.name;
+}
+
 /**
  * Walk the tree following `segments`.
  * All segments except the last navigate into children (namespaces).
@@ -152,8 +201,11 @@ export function resolvePath(
     const child = current.children.get(seg);
     if (!child) {
       const validTokens = [...current.children.keys()];
+      const hint = suggestToken(seg, validTokens);
       return {
-        error: `Unknown namespace "${seg}". Valid options: ${validTokens.join(", ")}`,
+        error: hint
+          ? `Unknown namespace "${seg}". Did you mean "${hint}"?`
+          : `Unknown namespace "${seg}". Valid options: ${validTokens.join(", ")}`,
         validTokens,
       };
     }
@@ -170,14 +222,19 @@ export function resolvePath(
       ...current.methods.keys(),
       ...current.children.keys(),
     ];
+    const hint = suggestToken(methodName, validTokens);
     if (current === tree) {
       return {
-        error: `Unknown namespace "${methodName}". Valid options: ${validTokens.join(", ")}`,
+        error: hint
+          ? `Unknown namespace "${methodName}". Did you mean "${hint}"?`
+          : `Unknown namespace "${methodName}". Valid options: ${validTokens.join(", ")}`,
         validTokens,
       };
     }
     return {
-      error: `Unknown method "${methodName}" on namespace "${current.name}". Valid: ${validTokens.join(", ")}`,
+      error: hint
+        ? `Unknown method "${methodName}" on namespace "${current.name}". Did you mean "${hint}"?`
+        : `Unknown method "${methodName}" on namespace "${current.name}". Valid: ${validTokens.join(", ")}`,
       validTokens,
     };
   }
@@ -195,4 +252,56 @@ const READ_ONLY_PREFIX =
 
 export function isReadOnlyMethod(name: string): boolean {
   return READ_ONLY_PREFIX.test(name);
+}
+
+export interface SearchMatch {
+  /** Runnable command path: a method (`payments create`) or namespace (`terminal actions`). */
+  path: string;
+  kind: "namespace" | "method";
+}
+
+/**
+ * Find namespaces and methods whose name contains `term`. A multi-word term is
+ * matched against the full path (`search "terminal actions"`); a single word is
+ * matched against each name segment, so `search create` finds `payments create`
+ * without listing every command under `payments`.
+ */
+export function searchTree(tree: NamespaceNode, term: string, limit = 100): SearchMatch[] {
+  const needle = term.trim().toLowerCase();
+  if (!needle) return [];
+  const matchPath = needle.includes(" ");
+  const matches: SearchMatch[] = [];
+
+  const walk = (node: NamespaceNode, prefix: string[]) => {
+    for (const [name, child] of node.children) {
+      const path = [...prefix, name];
+      const pathText = path.join(" ").toLowerCase();
+      if (matchPath ? pathText.includes(needle) : name.toLowerCase().includes(needle)) {
+        matches.push({ path: path.join(" "), kind: "namespace" });
+      }
+      walk(child, path);
+    }
+    for (const name of node.methods.keys()) {
+      const pathText = [...prefix, name].join(" ").toLowerCase();
+      if (matchPath ? pathText.includes(needle) : name.toLowerCase().includes(needle)) {
+        matches.push({ path: [...prefix, name].join(" "), kind: "method" });
+      }
+    }
+  };
+
+  walk(tree, []);
+
+  const rank = (match: SearchMatch): number => {
+    const path = match.path.toLowerCase();
+    if (path === needle) return 0;
+    const last = path.split(" ").pop()!;
+    if (last === needle) return 1;
+    if (last.startsWith(needle)) return 2;
+    if (path.startsWith(needle)) return 3;
+    return 4;
+  };
+
+  return matches
+    .sort((a, b) => rank(a) - rank(b) || a.path.localeCompare(b.path))
+    .slice(0, limit);
 }

@@ -34,6 +34,16 @@ All notable changes to this project are documented here. The format follows
 
 - `--` ends flag parsing, and `--field=value` is documented for values that
   start with `--` (e.g. `--note=--hello`).
+- `--timeout <seconds>` and `--retry <n>` are forwarded to the SDK client
+  (`timeoutInSeconds`, `maxRetries`); `--retry 0` disables retries.
+- `square search <term>` lists namespaces and methods whose name matches, with
+  no credentials required; multi-word terms match a path
+  (`square search "terminal actions"`).
+
+### Changed
+
+- Unknown namespace and method errors now suggest the closest name
+  (`Did you mean "payments"?`) instead of always dumping the full valid list.
 
 ### Added
 

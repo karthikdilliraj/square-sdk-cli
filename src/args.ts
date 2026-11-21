@@ -9,6 +9,8 @@ export interface ParsedFlags {
   json?: string;
   maxItems?: string;
   maxPages?: string;
+  timeout?: string;
+  retry?: string;
   jsonOutput?: true;
   stream?: true;
   rawPage?: true;
@@ -38,6 +40,8 @@ const STRING_FLAGS: Record<string, keyof ParsedFlags> = {
   json: "json",
   "max-items": "maxItems",
   "max-pages": "maxPages",
+  timeout: "timeout",
+  retry: "retry",
 };
 
 // Reserved global flags that are bare booleans

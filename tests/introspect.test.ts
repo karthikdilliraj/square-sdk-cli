@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { buildTree, resolvePath, isReadOnlyMethod } from "../src/introspect";
+import { buildTree, resolvePath, isReadOnlyMethod, suggestToken, searchTree } from "../src/introspect";
 import { createMockClient } from "./fixtures/mockClient";
 
 describe("introspect - buildTree", () => {
@@ -136,4 +136,79 @@ describe("isReadOnlyMethod", () => {
   for (const name of ["create", "update", "delete", "cancel", "refundPayment", "batchUpsert", "bulkDeleteCustomers", "complete", "fetch"]) {
     it(`${name} is a write`, () => expect(isReadOnlyMethod(name)).toBe(false));
   }
+});
+
+describe("suggestToken", () => {
+  const candidates = ["payments", "locations", "terminal", "list", "create"];
+
+  it("suggests the closest namespace for a typo", () => {
+    expect(suggestToken("paymets", candidates)).toBe("payments");
+  });
+
+  it("suggests a prefix match", () => {
+    expect(suggestToken("paym", candidates)).toBe("payments");
+  });
+
+  it("suggests for a one-letter omission", () => {
+    expect(suggestToken("lst", candidates)).toBe("list");
+  });
+
+  it("returns undefined when nothing is close", () => {
+    expect(suggestToken("zzzzz", candidates)).toBeUndefined();
+  });
+
+  it("is case-insensitive", () => {
+    expect(suggestToken("PAYMETS", candidates)).toBe("payments");
+  });
+});
+
+describe("did-you-mean in resolvePath", () => {
+  it("suggests a namespace", () => {
+    const result = resolvePath(buildTree(createMockClient()), ["paymets"]);
+    expect("error" in result && result.error).toMatch(/Did you mean "payments"\?/);
+  });
+
+  it("suggests a method", () => {
+    const result = resolvePath(buildTree(createMockClient()), ["payments", "lst"]);
+    expect("error" in result && result.error).toMatch(/Did you mean "list"\?/);
+  });
+
+  it("keeps the full list when there is no close match", () => {
+    const result = resolvePath(buildTree(createMockClient()), ["zzzzz"]);
+    expect("error" in result && result.error).toMatch(/Valid options:/);
+  });
+});
+
+describe("searchTree", () => {
+  const tree = buildTree(createMockClient());
+
+  it("finds a namespace by partial name", () => {
+    const matches = searchTree(tree, "paym");
+    expect(matches).toContainEqual({ path: "payments", kind: "namespace" });
+  });
+
+  it("finds methods across namespaces", () => {
+    const paths = searchTree(tree, "list").map((m) => m.path);
+    expect(paths).toContain("payments list");
+    expect(paths).toContain("locations list");
+    expect(paths).toContain("terminal actions list");
+  });
+
+  it("matches multi-word terms against the path", () => {
+    const matches = searchTree(tree, "terminal actions");
+    expect(matches).toContainEqual({ path: "terminal actions", kind: "namespace" });
+    expect(matches.every((m) => m.path.includes("terminal"))).toBe(true);
+  });
+
+  it("returns nothing for an unknown term", () => {
+    expect(searchTree(tree, "zzzzz")).toEqual([]);
+  });
+
+  it("honors the limit", () => {
+    expect(searchTree(tree, "list", 1).length).toBe(1);
+  });
+
+  it("ranks an exact name first", () => {
+    expect(searchTree(tree, "list")[0]?.path.split(" ").pop()).toBe("list");
+  });
 });

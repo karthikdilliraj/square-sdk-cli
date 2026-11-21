@@ -16,6 +16,8 @@ Global flags:
   --dry-run             Print the request that would be sent, without sending it
   --max-items <n>       Stop paging after n items
   --max-pages <n>       Stop paging after n pages
+  --timeout <seconds>   HTTP timeout per request (SDK default if omitted)
+  --retry <n>           Retry failed requests n times (SDK default: 2; 0 disables)
   --yes                 Skip the confirmation for write calls in production
   --verbose             Print request diagnostics and full error details to stderr
   --version             Print the CLI and Square SDK versions
@@ -49,6 +51,7 @@ export function renderRootHelp(tree: NamespaceNode): string {
   lines.push("  config use <profile>                              Set default profile");
   lines.push("  config remove <profile>                           Delete a profile");
   lines.push("  whoami                                            Show the merchant for the current token");
+  lines.push("  search <term>                                     Find namespaces and methods by name");
   lines.push("");
   lines.push(GLOBAL_FLAGS);
 

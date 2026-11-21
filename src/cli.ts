@@ -7,8 +7,8 @@ import { parseArgs } from "./args.ts";
 import { buildRequest, readJsonArg, ensureIdempotencyKey } from "./merge.ts";
 import { load, setProfile, getProfile, useProfile, removeProfile, type Profile } from "./config.ts";
 import { resolveAuth, parseEnvironment, type ResolvedAuth } from "./auth.ts";
-import { createClient as defaultCreateClient } from "./client.ts";
-import { buildTree, findNamespace, resolvePath, isReadOnlyMethod } from "./introspect.ts";
+import { createClient as defaultCreateClient, type ClientOptions } from "./client.ts";
+import { buildTree, findNamespace, resolvePath, isReadOnlyMethod, searchTree } from "./introspect.ts";
 import { execute } from "./execute.ts";
 import { print, renderError, bigIntReplacer } from "./output.ts";
 import { renderRootHelp, renderNamespaceHelp, renderMethodHelp } from "./help.ts";
@@ -16,7 +16,10 @@ import { terminalPrompter, type Prompter } from "./prompt.ts";
 import { getVersions, formatVersionLine } from "./version.ts";
 
 export interface RunDeps {
-  createClient: (auth: Pick<ResolvedAuth, "token" | "environment">) => SquareClient;
+  createClient: (
+    auth: Pick<ResolvedAuth, "token" | "environment">,
+    options?: ClientOptions
+  ) => SquareClient;
   /** Terminal input (confirmations, hidden token entry, stdin). Defaults to the real terminal. */
   prompter?: Prompter;
 }
@@ -76,6 +79,32 @@ export async function run(
   // network call), so help and unknown-command errors never need credentials.
   const shapeTree = buildTree(deps.createClient({ token: "dummy", environment: "sandbox" }));
 
+  // ---- search (built-in, no auth required) ----
+  if (positionals[0] === "search") {
+    if (flags.help) {
+      stdout(
+        "Usage: square search <term>\n\nList namespaces and methods whose name contains <term>.\nQuote multi-word terms to match a path, e.g. square search \"terminal actions\"."
+      );
+      return 0;
+    }
+    const term = positionals.slice(1).join(" ");
+    if (!term.trim()) {
+      stderr("Usage: square search <term>");
+      return 1;
+    }
+    const limit = 100;
+    const matches = searchTree(shapeTree, term, limit);
+    if (matches.length === 0) {
+      stdout(`No matches for "${term}".`);
+      return 0;
+    }
+    for (const match of matches) stdout(match.path);
+    if (matches.length === limit) {
+      stderr(`Showing the first ${limit} matches. Use a more specific term.`);
+    }
+    return 0;
+  }
+
   if (positionals.length === 0) {
     stdout(renderRootHelp(shapeTree));
     return 0;
@@ -109,6 +138,19 @@ export async function run(
 
   // ---- API path ----
 
+  // Transport flags are validated before auth so a bad value is the reported
+  // problem even without a token.
+  let clientOptions: ClientOptions;
+  try {
+    clientOptions = {};
+    const timeoutInSeconds = parseTimeout(flags.timeout);
+    const maxRetries = parseRetries(flags.retry);
+    if (timeoutInSeconds !== undefined) clientOptions.timeoutInSeconds = timeoutInSeconds;
+    if (maxRetries !== undefined) clientOptions.maxRetries = maxRetries;
+  } catch (e: unknown) {
+    return renderError(e, { writeFn: stderr });
+  }
+
   // Resolve auth
   let auth: ResolvedAuth;
   try {
@@ -118,7 +160,7 @@ export async function run(
   }
 
   // Resolve the method again on the real, authenticated client
-  const resolveResult = resolvePath(buildTree(deps.createClient(auth)), positionals);
+  const resolveResult = resolvePath(buildTree(deps.createClient(auth, clientOptions)), positionals);
   if ("error" in resolveResult) {
     stderr(`Error: ${resolveResult.error}`);
     return 1;
@@ -390,6 +432,26 @@ function parseLimit(value: unknown, flag: string): number | undefined {
   const n = Number(value);
   if (typeof value !== "string" || !Number.isInteger(n) || n < 1) {
     throw new Error(`${flag} must be a positive integer`);
+  }
+  return n;
+}
+
+/** Parse `--timeout`: a positive number of seconds (fractions allowed). */
+function parseTimeout(value: unknown): number | undefined {
+  if (value === undefined) return undefined;
+  const n = Number(value);
+  if (typeof value !== "string" || !Number.isFinite(n) || n <= 0) {
+    throw new Error("--timeout must be a positive number of seconds");
+  }
+  return n;
+}
+
+/** Parse `--retry`: a non-negative integer (0 disables retries). */
+function parseRetries(value: unknown): number | undefined {
+  if (value === undefined) return undefined;
+  const n = Number(value);
+  if (typeof value !== "string" || !Number.isInteger(n) || n < 0) {
+    throw new Error("--retry must be a non-negative integer (0 disables retries)");
   }
   return n;
 }
