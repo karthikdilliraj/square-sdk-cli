@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { execute } from "../src/execute";
 import { buildTree, resolvePath } from "../src/introspect";
 import { createMockClient, MockSquareError } from "./fixtures/mockClient";
@@ -7,7 +7,8 @@ function getMethod(namespace: string, methodName: string) {
   const client = createMockClient();
   const tree = buildTree(client);
   const resolved = resolvePath(tree, [namespace, methodName]);
-  if ("error" in resolved) throw new Error(`Could not resolve ${namespace}.${methodName}: ${resolved.error}`);
+  if ("error" in resolved)
+    throw new Error(`Could not resolve ${namespace}.${methodName}: ${resolved.error}`);
   return resolved.method;
 }
 
@@ -15,7 +16,8 @@ function getNestedMethod(segments: string[]) {
   const client = createMockClient();
   const tree = buildTree(client);
   const resolved = resolvePath(tree, segments);
-  if ("error" in resolved) throw new Error(`Could not resolve ${segments.join(".")}: ${resolved.error}`);
+  if ("error" in resolved)
+    throw new Error(`Could not resolve ${segments.join(".")}: ${resolved.error}`);
   return resolved.method;
 }
 
@@ -112,14 +114,12 @@ describe("execute - error propagation", () => {
 describe("execute - BigInt result from output", () => {
   it("BigInt fields in result can be serialized with replacer", async () => {
     const method = getMethod("payments", "list");
-    const result = await execute(method, {}, {}) as any[];
+    const result = (await execute(method, {}, {})) as any[];
     // result contains BigInt amounts
     const bigIntItem = result.find((r: any) => typeof r.amount_money?.amount === "bigint");
     expect(bigIntItem).toBeDefined();
     // Serialize without throwing
-    const json = JSON.stringify(result, (_k, v) =>
-      typeof v === "bigint" ? v.toString() : v
-    );
+    const json = JSON.stringify(result, (_k, v) => (typeof v === "bigint" ? v.toString() : v));
     expect(typeof json).toBe("string");
     expect(json).toContain("100");
   });
@@ -137,13 +137,21 @@ describe("execute - paging limits", () => {
   });
 
   it("limits larger than the data return everything", async () => {
-    const result = await execute(getMethod("payments", "list"), {}, { maxItems: 100, maxPages: 100 });
+    const result = await execute(
+      getMethod("payments", "list"),
+      {},
+      { maxItems: 100, maxPages: 100 },
+    );
     expect((result as any[]).length).toBe(3);
   });
 
   it("maxItems applies in stream mode", async () => {
     const items: unknown[] = [];
-    for await (const item of execute(getMethod("payments", "list"), {}, { stream: true, maxItems: 3 }) as AsyncIterable<unknown>) {
+    for await (const item of execute(
+      getMethod("payments", "list"),
+      {},
+      { stream: true, maxItems: 3 },
+    ) as AsyncIterable<unknown>) {
       items.push(item);
     }
     expect(items.length).toBe(3);

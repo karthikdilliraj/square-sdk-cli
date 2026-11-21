@@ -2,10 +2,10 @@
  * config.ts - Profile-based configuration management.
  */
 
-import * as fs from "fs";
-import * as path from "path";
-import * as os from "os";
 import { randomUUID } from "crypto";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 
 export interface Profile {
   token: string;
@@ -72,7 +72,9 @@ function validateConfig(parsed: unknown, configPath: string): Config {
       fail(`profile "${name}" is missing a "token"`);
     }
     if (p["environment"] !== "sandbox" && p["environment"] !== "production") {
-      fail(`profile "${name}" has environment ${JSON.stringify(p["environment"])}; expected "sandbox" or "production"`);
+      fail(
+        `profile "${name}" has environment ${JSON.stringify(p["environment"])}; expected "sandbox" or "production"`,
+      );
     }
   }
 
@@ -112,7 +114,10 @@ export async function save(cfg: Config): Promise<void> {
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
 
   const content = JSON.stringify(cfg, null, 2);
-  const tmpPath = path.join(dir, `.${path.basename(configPath)}.${process.pid}.${randomUUID()}.tmp`);
+  const tmpPath = path.join(
+    dir,
+    `.${path.basename(configPath)}.${process.pid}.${randomUUID()}.tmp`,
+  );
   try {
     fs.writeFileSync(tmpPath, content, { mode: 0o600 });
     fs.renameSync(tmpPath, configPath);
@@ -146,7 +151,9 @@ export async function listProfiles(): Promise<string[]> {
 export async function useProfile(name: string): Promise<void> {
   const cfg = await load();
   if (!cfg.profiles[name]) {
-    throw new Error(`Profile "${name}" does not exist. Use "config set ${name} --token <TOKEN>" to create it.`);
+    throw new Error(
+      `Profile "${name}" does not exist. Use "config set ${name} --token <TOKEN>" to create it.`,
+    );
   }
   cfg.defaultProfile = name;
   await save(cfg);

@@ -174,10 +174,30 @@ Unknown namespace and method names suggest the closest match
 ## Develop
 
 ```bash
-bun test          # full suite (incl. SDK contract guard test)
-bun run typecheck # tsc --noEmit
+bun install
+bun test              # full suite (incl. SDK contract guard test)
+bun run test:coverage # same, with enforced coverage thresholds
+bun run typecheck     # tsc --noEmit
+bun run lint          # Biome lint + format check (bun run lint:fix to apply)
 bun bin/square.ts <namespace> <method>
 ```
+
+CI runs lint, typecheck, tests with coverage thresholds, the build, and node
+18/20/22 smoke tests on both Ubuntu and macOS. A weekly job repeats the suite
+against the newest `square` release and smoke-tests the rebuild bundle.
+
+## Releasing
+
+Pushing a version tag publishes to npm with
+[provenance](https://docs.npmjs.com/generating-provenance-statements):
+
+```bash
+npm version patch        # bumps package.json and creates the tag
+git push --follow-tags
+```
+
+The tag must match `package.json` (`v0.2.1` ↔ `0.2.1`) or the workflow fails.
+It needs an `NPM_TOKEN` repository secret.
 
 ## Supported Square SDK versions
 

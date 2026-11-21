@@ -2,7 +2,7 @@
  * output.test.ts - Readable error rendering (renderError).
  */
 
-import { test, expect, describe } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { SquareError } from "square";
 import { renderError } from "../src/output.ts";
 
@@ -28,8 +28,13 @@ describe("renderError", () => {
   test("renders status with human reason phrase", () => {
     const { lines } = capture(
       squareError(400, [
-        { category: "INVALID_REQUEST_ERROR", code: "INVALID_ENUM_VALUE", field: "sort_field", detail: "`` is not a valid enum value for `sort_field`." },
-      ])
+        {
+          category: "INVALID_REQUEST_ERROR",
+          code: "INVALID_ENUM_VALUE",
+          field: "sort_field",
+          detail: "`` is not a valid enum value for `sort_field`.",
+        },
+      ]),
     );
     const out = lines.join("\n");
     expect(out).toContain("HTTP 400 Bad Request");
@@ -40,8 +45,13 @@ describe("renderError", () => {
   test("leads with human detail when present", () => {
     const { lines } = capture(
       squareError(400, [
-        { category: "INVALID_REQUEST_ERROR", code: "INVALID_ENUM_VALUE", field: "sort_field", detail: "human detail here" },
-      ])
+        {
+          category: "INVALID_REQUEST_ERROR",
+          code: "INVALID_ENUM_VALUE",
+          field: "sort_field",
+          detail: "human detail here",
+        },
+      ]),
     );
     expect(lines.join("\n")).toContain("• human detail here");
   });
@@ -50,7 +60,7 @@ describe("renderError", () => {
     const { lines } = capture(
       squareError(400, [
         { category: "INVALID_REQUEST_ERROR", code: "INVALID_ENUM_VALUE", field: "sort_field" },
-      ])
+      ]),
     );
     expect(lines.join("\n")).toContain("--sortField");
   });
@@ -58,8 +68,12 @@ describe("renderError", () => {
   test("gives auth hint for UNAUTHORIZED", () => {
     const { lines } = capture(
       squareError(401, [
-        { category: "AUTHENTICATION_ERROR", code: "UNAUTHORIZED", detail: "This request could not be authorized." },
-      ])
+        {
+          category: "AUTHENTICATION_ERROR",
+          code: "UNAUTHORIZED",
+          detail: "This request could not be authorized.",
+        },
+      ]),
     );
     const out = lines.join("\n");
     expect(out).toContain("HTTP 401 Unauthorized");
@@ -76,7 +90,7 @@ describe("renderError", () => {
       squareError(400, [
         { category: "INVALID_REQUEST_ERROR", code: "VALUE_EMPTY", field: "name" },
         { category: "INVALID_REQUEST_ERROR", code: "INVALID_ENUM_VALUE", field: "sort_order" },
-      ])
+      ]),
     );
     const out = lines.join("\n");
     expect(out).toContain("VALUE_EMPTY");
@@ -88,7 +102,9 @@ describe("renderError - request id", () => {
   test("prints the request id from response headers", () => {
     const err = new SquareError({
       statusCode: 400,
-      body: { errors: [{ category: "INVALID_REQUEST_ERROR", code: "BAD_REQUEST", detail: "nope" }] },
+      body: {
+        errors: [{ category: "INVALID_REQUEST_ERROR", code: "BAD_REQUEST", detail: "nope" }],
+      },
       rawResponse: { headers: new Headers({ "request-id": "req-header" }) } as any,
     });
     expect(capture(err).lines.join("\n")).toContain("request id: req-header");

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { flushStream, flushStreams } from "../src/stdio";
 
 function fakeStream(writableLength: number | undefined, opts: { throws?: boolean } = {}) {

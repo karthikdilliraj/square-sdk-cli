@@ -2,8 +2,8 @@
  * merge.ts - Build a request object from a JSON string and field overrides.
  */
 
-import * as fs from "fs";
 import { randomUUID } from "crypto";
+import * as fs from "fs";
 import type { FieldEntry } from "./args.ts";
 
 /** Field path suffix that forces the value to stay a string (no JSON coercion). */
@@ -45,7 +45,7 @@ function pathConflict(path: string, prefix: string, existing: unknown, wantsArra
   const expected = wantsArray ? "an array" : "an object";
   return new Error(
     `Invalid field path "${path}": "${prefix}" is already ${describeKind(existing)}, ` +
-      `but the path needs ${expected} there. Pass the whole value with --json instead.`
+      `but the path needs ${expected} there. Pass the whole value with --json instead.`,
   );
 }
 
@@ -87,10 +87,7 @@ function deepSet(obj: Record<string, unknown>, path: string, value: unknown): vo
  * Build request object from optional JSON string and field entries.
  * Fields deep-merge over (and override) JSON values.
  */
-export function buildRequest(
-  jsonStr: string | undefined,
-  fields: FieldEntry[]
-): object {
+export function buildRequest(jsonStr: string | undefined, fields: FieldEntry[]): object {
   let base: Record<string, unknown> = {};
 
   if (jsonStr !== undefined) {
@@ -126,7 +123,7 @@ export function buildRequest(
  */
 export function readJsonArg(
   raw: string,
-  readFile: (source: string | 0) => string = (source) => fs.readFileSync(source, "utf8")
+  readFile: (source: string | 0) => string = (source) => fs.readFileSync(source, "utf8"),
 ): string {
   if (raw === "-") return readFile(0);
   if (raw.startsWith("@")) {
@@ -151,7 +148,7 @@ export function readJsonArg(
 export function ensureIdempotencyKey(
   request: object,
   methodName: string,
-  newKey: () => string = randomUUID
+  newKey: () => string = randomUUID,
 ): string | undefined {
   if (/IdempotencyKey/.test(methodName)) return undefined;
   const body = request as Record<string, unknown>;

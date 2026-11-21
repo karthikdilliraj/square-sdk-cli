@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { SquareEnvironment } from "square";
 import { createClient } from "../src/client";
 
@@ -6,7 +6,7 @@ describe("createClient", () => {
   it("forwards timeout and retry options to the SDK", () => {
     const client = createClient(
       { token: "dummy", environment: "sandbox" },
-      { timeoutInSeconds: 5, maxRetries: 0 }
+      { timeoutInSeconds: 5, maxRetries: 0 },
     );
     const options = (client as any)._options;
     expect(options.timeoutInSeconds).toBe(5);

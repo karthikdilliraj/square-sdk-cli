@@ -20,7 +20,7 @@ export interface BrokenPipeGuardOptions {
 
 export function guardBrokenPipe(
   streams: readonly ErrorEmittingStream[],
-  options: BrokenPipeGuardOptions = {}
+  options: BrokenPipeGuardOptions = {},
 ): void {
   const exit = options.exit ?? ((code: number) => process.exit(code));
   const report =

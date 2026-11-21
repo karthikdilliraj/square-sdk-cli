@@ -47,11 +47,17 @@ export function renderRootHelp(tree: NamespaceNode): string {
   lines.push("  config set <profile> [--token <tok>|-] --env <env> Create/update a profile");
   lines.push("                                                    (omit --token to be prompted)");
   lines.push("  config get <profile>                              Show profile (token masked)");
-  lines.push("  config list                                       List profiles (* marks the default)");
+  lines.push(
+    "  config list                                       List profiles (* marks the default)",
+  );
   lines.push("  config use <profile>                              Set default profile");
   lines.push("  config remove <profile>                           Delete a profile");
-  lines.push("  whoami                                            Show the merchant for the current token");
-  lines.push("  search <term>                                     Find namespaces and methods by name");
+  lines.push(
+    "  whoami                                            Show the merchant for the current token",
+  );
+  lines.push(
+    "  search <term>                                     Find namespaces and methods by name",
+  );
   lines.push("");
   lines.push(GLOBAL_FLAGS);
 
@@ -103,7 +109,9 @@ export function renderMethodHelp(namespaceName: string, methodName: string): str
   lines.push(`                               e.g. --amountMoney.amount 100`);
   lines.push("  --<field.path>:str <value>   Same, but keep the value a string (no JSON coercion)");
   lines.push(`                               e.g. --address.postalCode:str 94103`);
-  lines.push("  --<field.path>=<value>       Same, for values that start with -- (e.g. --note=--hi)");
+  lines.push(
+    "  --<field.path>=<value>       Same, for values that start with -- (e.g. --note=--hi)",
+  );
   lines.push("");
   lines.push("Always pass a request object (even if it is empty).");
   lines.push("");

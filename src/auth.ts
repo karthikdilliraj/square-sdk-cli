@@ -42,7 +42,7 @@ function resolveEnvironment(flags: AuthFlags, env: EnvVars): "sandbox" | "produc
  */
 function resolveProfileEnvironment(
   flags: AuthFlags,
-  profileEnvironment: "sandbox" | "production"
+  profileEnvironment: "sandbox" | "production",
 ): "sandbox" | "production" {
   if (flags.env === undefined) return profileEnvironment;
   return parseEnvironment(String(flags.env), "--env");
@@ -56,17 +56,13 @@ function resolveProfileEnvironment(
  * 2) --token flag or SQUARE_ACCESS_TOKEN env var (env SQUARE_ENVIRONMENT or --env, default "sandbox")
  * 3) default profile from config (same --env override as 1)
  */
-export function resolveAuth(
-  flags: AuthFlags,
-  env: EnvVars,
-  config: Config
-): ResolvedAuth {
+export function resolveAuth(flags: AuthFlags, env: EnvVars, config: Config): ResolvedAuth {
   // 1. --profile flag
   if (flags.profile !== undefined) {
     const profile = config.profiles[flags.profile];
     if (!profile) {
       throw new Error(
-        `Profile "${flags.profile}" not found. Available profiles: ${Object.keys(config.profiles).join(", ") || "(none)"}`
+        `Profile "${flags.profile}" not found. Available profiles: ${Object.keys(config.profiles).join(", ") || "(none)"}`,
       );
     }
     return {
@@ -96,6 +92,6 @@ export function resolveAuth(
   }
 
   throw new Error(
-    "No authentication found. Provide --token, set SQUARE_ACCESS_TOKEN, use --profile, or configure a default profile with `square config use <profile>`."
+    "No authentication found. Provide --token, set SQUARE_ACCESS_TOKEN, use --profile, or configure a default profile with `square config use <profile>`.",
   );
 }

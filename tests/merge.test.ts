@@ -1,5 +1,5 @@
-import { describe, it, expect } from "bun:test";
-import { buildRequest, readJsonArg, ensureIdempotencyKey } from "../src/merge";
+import { describe, expect, it } from "bun:test";
+import { buildRequest, ensureIdempotencyKey, readJsonArg } from "../src/merge";
 
 describe("buildRequest - json only", () => {
   it("parses json string into object", () => {
@@ -66,20 +66,20 @@ describe("buildRequest - fields only", () => {
 
 describe("buildRequest - field path conflicts", () => {
   it("names the conflicting parent instead of throwing a TypeError", () => {
-    expect(() =>
-      buildRequest('{"a":{"b":1}}', [{ path: "a.b.c", value: "2" }])
-    ).toThrow(/Invalid field path "a\.b\.c": "a\.b" is already a number/);
+    expect(() => buildRequest('{"a":{"b":1}}', [{ path: "a.b.c", value: "2" }])).toThrow(
+      /Invalid field path "a\.b\.c": "a\.b" is already a number/,
+    );
   });
 
   it("rejects indexing into an object", () => {
     expect(() => buildRequest('{"a":{}}', [{ path: "a.0", value: "1" }])).toThrow(
-      /already an object, but the path needs an array/
+      /already an object, but the path needs an array/,
     );
   });
 
   it("rejects a key on an array (JSON would drop it)", () => {
     expect(() => buildRequest('{"a":[]}', [{ path: "a.b", value: "1" }])).toThrow(
-      /already an array, but the path needs an object/
+      /already an array, but the path needs an object/,
     );
   });
 
@@ -154,14 +154,16 @@ describe("buildRequest - field path guard", () => {
   for (const seg of ["__proto__", "constructor", "prototype"]) {
     it(`rejects "${seg}" in a field path`, () => {
       expect(() => buildRequest(undefined, [{ path: `${seg}.polluted`, value: "1" }])).toThrow(
-        /not allowed/
+        /not allowed/,
       );
       expect(({} as any).polluted).toBeUndefined();
     });
   }
 
   it("rejects a forbidden segment deeper in the path", () => {
-    expect(() => buildRequest(undefined, [{ path: "a.__proto__.b", value: "1" }])).toThrow(/not allowed/);
+    expect(() => buildRequest(undefined, [{ path: "a.__proto__.b", value: "1" }])).toThrow(
+      /not allowed/,
+    );
   });
 });
 

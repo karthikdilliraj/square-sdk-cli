@@ -45,6 +45,18 @@ All notable changes to this project are documented here. The format follows
 - Unknown namespace and method errors now suggest the closest name
   (`Did you mean "payments"?`) instead of always dumping the full valid list.
 
+### Internal
+
+- Biome provides linting and formatting (`bun run lint`, `lint:fix`, `format`),
+  enforced in CI and `prepublishOnly`.
+- `bun test --coverage` enforces line/function thresholds (`bunfig.toml`).
+- CI runs on macOS as well as Ubuntu; the node smoke test also covers
+  `--version` and `search`.
+- The weekly newest-SDK workflow now builds the bundle and smoke-tests it on
+  node, so bundle-only breakage is caught too.
+- Pushing a `v*` tag publishes to npm with provenance; the tag must match
+  `package.json`.
+
 ### Added
 
 - `square --version` prints the CLI and Square SDK versions (with

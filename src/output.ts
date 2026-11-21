@@ -43,10 +43,7 @@ const REQUEST_ID_HEADERS = [
  * body as `request_id` / `requestId`.
  */
 export function getRequestId(err: SquareError): string | undefined {
-  const body = err.body as
-    | { request_id?: unknown; requestId?: unknown }
-    | null
-    | undefined;
+  const body = err.body as { request_id?: unknown; requestId?: unknown } | null | undefined;
   for (const key of ["request_id", "requestId"] as const) {
     const value = body?.[key];
     if (typeof value === "string" && value) return value;
@@ -92,9 +89,9 @@ function hintFor(e: SquareBodyError): string | undefined {
   const field = e.field ?? "";
   if (e.code === "INVALID_ENUM_VALUE" && /^sort_/.test(field)) {
     if (field === "sort_field")
-      return 'This list endpoint needs an explicit sort field, e.g. `--sortField CREATED_AT`.';
+      return "This list endpoint needs an explicit sort field, e.g. `--sortField CREATED_AT`.";
     if (field === "sort_order")
-      return 'This list endpoint needs an explicit sort order, e.g. `--sortOrder ASC`.';
+      return "This list endpoint needs an explicit sort order, e.g. `--sortOrder ASC`.";
   }
   switch (e.code) {
     case "UNAUTHORIZED":
@@ -131,15 +128,12 @@ function camelize(field: string): string {
  * Render an error to stderr (or custom write fn). Returns exit code 1.
  */
 export function renderError(err: unknown, options: RenderErrorOptions = {}): number {
-  const write =
-    options.writeFn ?? ((msg: string) => process.stderr.write(msg + "\n"));
+  const write = options.writeFn ?? ((msg: string) => process.stderr.write(msg + "\n"));
 
   if (err instanceof SquareError) {
     const status = err.statusCode;
     const reason = status ? STATUS_REASON[status] : undefined;
-    const statusText = status
-      ? `HTTP ${status}${reason ? " " + reason : ""}`
-      : "request failed";
+    const statusText = status ? `HTTP ${status}${reason ? " " + reason : ""}` : "request failed";
     write(`✗ Square API request failed (${statusText})`);
 
     const requestId = getRequestId(err);

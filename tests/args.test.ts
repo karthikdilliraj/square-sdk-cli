@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { parseArgs } from "../src/args";
 
 describe("parseArgs - positionals", () => {
@@ -85,7 +85,14 @@ describe("parseArgs - field flags", () => {
   });
 
   it("fields and positionals coexist", () => {
-    const result = parseArgs(["payments", "create", "--amountMoney.amount", "500", "--currency", "USD"]);
+    const result = parseArgs([
+      "payments",
+      "create",
+      "--amountMoney.amount",
+      "500",
+      "--currency",
+      "USD",
+    ]);
     expect(result.positionals).toEqual(["payments", "create"]);
     expect(result.fields).toContainEqual({ path: "amountMoney.amount", value: "500" });
     expect(result.fields).toContainEqual({ path: "currency", value: "USD" });

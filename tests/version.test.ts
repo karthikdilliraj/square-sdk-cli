@@ -1,5 +1,5 @@
-import { describe, it, expect } from "bun:test";
-import { getVersions, formatVersionLine } from "../src/version";
+import { describe, expect, it } from "bun:test";
+import { formatVersionLine, getVersions } from "../src/version";
 
 describe("version", () => {
   it("resolves the CLI version from its package.json", () => {
@@ -12,7 +12,7 @@ describe("version", () => {
 
   it("formats with and without an SDK version", () => {
     expect(formatVersionLine({ cli: "1.2.3", sdk: "9.9.9" })).toBe(
-      "square-sdk-cli 1.2.3 (Square SDK 9.9.9)"
+      "square-sdk-cli 1.2.3 (Square SDK 9.9.9)",
     );
     expect(formatVersionLine({ cli: "1.2.3" })).toBe("square-sdk-cli 1.2.3");
   });

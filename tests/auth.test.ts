@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { resolveAuth } from "../src/auth";
 import type { Config } from "../src/config";
 
@@ -31,7 +31,7 @@ describe("resolveAuth - precedence", () => {
     const result = resolveAuth(
       { token: "flag-token" },
       { SQUARE_ACCESS_TOKEN: "env-token" },
-      baseConfig
+      baseConfig,
     );
     expect(result.token).toBe("flag-token");
   });
@@ -54,11 +54,7 @@ describe("resolveAuth - precedence", () => {
 
 describe("resolveAuth - environment resolution", () => {
   it("SQUARE_ENVIRONMENT env var sets environment", () => {
-    const result = resolveAuth(
-      { token: "tok" },
-      { SQUARE_ENVIRONMENT: "production" },
-      baseConfig
-    );
+    const result = resolveAuth({ token: "tok" }, { SQUARE_ENVIRONMENT: "production" }, baseConfig);
     expect(result.environment).toBe("production");
   });
 
@@ -76,7 +72,7 @@ describe("resolveAuth - environment resolution", () => {
     const result = resolveAuth(
       { token: "tok", env: "production" },
       { SQUARE_ENVIRONMENT: "sandbox" },
-      baseConfig
+      baseConfig,
     );
     expect(result.environment).toBe("production");
   });
@@ -89,12 +85,14 @@ describe("resolveAuth - environment validation", () => {
   });
 
   it("rejects a mistyped --env instead of falling back to sandbox", () => {
-    expect(() => resolveAuth({ token: "t", env: "prod" }, {}, baseConfig)).toThrow(/Invalid --env "prod"/);
+    expect(() => resolveAuth({ token: "t", env: "prod" }, {}, baseConfig)).toThrow(
+      /Invalid --env "prod"/,
+    );
   });
 
   it("rejects an invalid SQUARE_ENVIRONMENT", () => {
     expect(() =>
-      resolveAuth({ token: "t" }, { SQUARE_ENVIRONMENT: "Production" }, baseConfig)
+      resolveAuth({ token: "t" }, { SQUARE_ENVIRONMENT: "Production" }, baseConfig),
     ).toThrow(/SQUARE_ENVIRONMENT/);
   });
 });
@@ -106,11 +104,15 @@ describe("resolveAuth - token source", () => {
   });
 
   it("--token", () => {
-    expect(resolveAuth({ token: "t" }, { SQUARE_ACCESS_TOKEN: "e" }, baseConfig).source).toBe("--token");
+    expect(resolveAuth({ token: "t" }, { SQUARE_ACCESS_TOKEN: "e" }, baseConfig).source).toBe(
+      "--token",
+    );
   });
 
   it("SQUARE_ACCESS_TOKEN", () => {
-    expect(resolveAuth({}, { SQUARE_ACCESS_TOKEN: "e" }, baseConfig).source).toBe("SQUARE_ACCESS_TOKEN");
+    expect(resolveAuth({}, { SQUARE_ACCESS_TOKEN: "e" }, baseConfig).source).toBe(
+      "SQUARE_ACCESS_TOKEN",
+    );
   });
 
   it("default profile", () => {

@@ -10,7 +10,7 @@
  * Verified against square@40–44.
  */
 
-import { test, expect, describe } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import * as squarePkg from "square";
 import { SquareClient, SquareEnvironment, SquareError } from "square";
 import { buildTree, resolvePath } from "../src/introspect.ts";

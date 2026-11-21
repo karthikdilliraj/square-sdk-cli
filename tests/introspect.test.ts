@@ -1,5 +1,11 @@
-import { describe, it, expect } from "bun:test";
-import { buildTree, resolvePath, isReadOnlyMethod, suggestToken, searchTree } from "../src/introspect";
+import { describe, expect, it } from "bun:test";
+import {
+  buildTree,
+  isReadOnlyMethod,
+  resolvePath,
+  searchTree,
+  suggestToken,
+} from "../src/introspect";
 import { createMockClient } from "./fixtures/mockClient";
 
 describe("introspect - buildTree", () => {
@@ -130,10 +136,31 @@ describe("introspect - resolvePath", () => {
 });
 
 describe("isReadOnlyMethod", () => {
-  for (const name of ["get", "list", "listEntries", "search", "searchItems", "retrieveJob", "batchGet", "bulkRetrieveCustomers", "calculate", "v1ListOrders"]) {
+  for (const name of [
+    "get",
+    "list",
+    "listEntries",
+    "search",
+    "searchItems",
+    "retrieveJob",
+    "batchGet",
+    "bulkRetrieveCustomers",
+    "calculate",
+    "v1ListOrders",
+  ]) {
     it(`${name} is read-only`, () => expect(isReadOnlyMethod(name)).toBe(true));
   }
-  for (const name of ["create", "update", "delete", "cancel", "refundPayment", "batchUpsert", "bulkDeleteCustomers", "complete", "fetch"]) {
+  for (const name of [
+    "create",
+    "update",
+    "delete",
+    "cancel",
+    "refundPayment",
+    "batchUpsert",
+    "bulkDeleteCustomers",
+    "complete",
+    "fetch",
+  ]) {
     it(`${name} is a write`, () => expect(isReadOnlyMethod(name)).toBe(false));
   }
 });

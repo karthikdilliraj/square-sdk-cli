@@ -4,21 +4,27 @@
 
 import type { SquareClient } from "square";
 import { parseArgs } from "./args.ts";
-import { buildRequest, readJsonArg, ensureIdempotencyKey } from "./merge.ts";
-import { load, setProfile, getProfile, useProfile, removeProfile, type Profile } from "./config.ts";
-import { resolveAuth, parseEnvironment, type ResolvedAuth } from "./auth.ts";
-import { createClient as defaultCreateClient, type ClientOptions } from "./client.ts";
-import { buildTree, findNamespace, resolvePath, isReadOnlyMethod, searchTree } from "./introspect.ts";
+import { parseEnvironment, type ResolvedAuth, resolveAuth } from "./auth.ts";
+import { type ClientOptions, createClient as defaultCreateClient } from "./client.ts";
+import { getProfile, load, type Profile, removeProfile, setProfile, useProfile } from "./config.ts";
 import { execute } from "./execute.ts";
-import { print, renderError, bigIntReplacer } from "./output.ts";
-import { renderRootHelp, renderNamespaceHelp, renderMethodHelp } from "./help.ts";
-import { terminalPrompter, type Prompter } from "./prompt.ts";
-import { getVersions, formatVersionLine } from "./version.ts";
+import { renderMethodHelp, renderNamespaceHelp, renderRootHelp } from "./help.ts";
+import {
+  buildTree,
+  findNamespace,
+  isReadOnlyMethod,
+  resolvePath,
+  searchTree,
+} from "./introspect.ts";
+import { buildRequest, ensureIdempotencyKey, readJsonArg } from "./merge.ts";
+import { bigIntReplacer, print, renderError } from "./output.ts";
+import { type Prompter, terminalPrompter } from "./prompt.ts";
+import { formatVersionLine, getVersions } from "./version.ts";
 
 export interface RunDeps {
   createClient: (
     auth: Pick<ResolvedAuth, "token" | "environment">,
-    options?: ClientOptions
+    options?: ClientOptions,
   ) => SquareClient;
   /** Terminal input (confirmations, hidden token entry, stdin). Defaults to the real terminal. */
   prompter?: Prompter;
@@ -40,7 +46,7 @@ export async function run(
   argv: string[],
   deps: RunDeps = defaultDeps,
   stdoutWrite?: (msg: string) => void,
-  stderrWrite?: (msg: string) => void
+  stderrWrite?: (msg: string) => void,
 ): Promise<number> {
   const stdout = stdoutWrite ?? ((msg: string) => process.stdout.write(msg + "\n"));
   const stderr = stderrWrite ?? ((msg: string) => process.stderr.write(msg + "\n"));
@@ -68,7 +74,9 @@ export async function run(
   // ---- whoami (built-in, needs auth) ----
   if (positionals[0] === "whoami") {
     if (flags.help) {
-      stdout("Usage: square whoami [--profile <name>] [--json-output]\n\nShow the merchant, environment, and token source in use.");
+      stdout(
+        "Usage: square whoami [--profile <name>] [--json-output]\n\nShow the merchant, environment, and token source in use.",
+      );
       return 0;
     }
     return runWhoami(deps, flags, stdout, stderr);
@@ -83,7 +91,7 @@ export async function run(
   if (positionals[0] === "search") {
     if (flags.help) {
       stdout(
-        "Usage: square search <term>\n\nList namespaces and methods whose name contains <term>.\nQuote multi-word terms to match a path, e.g. square search \"terminal actions\"."
+        'Usage: square search <term>\n\nList namespaces and methods whose name contains <term>.\nQuote multi-word terms to match a path, e.g. square search "terminal actions".',
       );
       return 0;
     }
@@ -122,12 +130,7 @@ export async function run(
     if ("error" in shapeResult) {
       stdout(renderRootHelp(shapeTree));
     } else {
-      stdout(
-        renderMethodHelp(
-          positionals.slice(0, -1).join(" "),
-          shapeResult.method.name
-        )
-      );
+      stdout(renderMethodHelp(positionals.slice(0, -1).join(" "), shapeResult.method.name));
     }
     return 0;
   }
@@ -179,10 +182,7 @@ export async function run(
     if (flags.json !== undefined && typeof flags.json !== "string") {
       throw new Error("--json requires a value: a JSON string, @file, or - for stdin");
     }
-    request = buildRequest(
-      flags.json === undefined ? undefined : readJsonArg(flags.json),
-      fields
-    );
+    request = buildRequest(flags.json === undefined ? undefined : readJsonArg(flags.json), fields);
   } catch (e: unknown) {
     renderError(e, { writeFn: stderr });
     return 1;
@@ -202,7 +202,7 @@ export async function run(
         method: positionals.join(" "),
         request,
       },
-      { raw, writeFn: stdout }
+      { raw, writeFn: stdout },
     );
     return 0;
   }
@@ -211,10 +211,14 @@ export async function run(
   if (auth.environment === "production" && !readOnly && !flags.yes) {
     const command = positionals.join(" ");
     if (!prompter.isInteractive()) {
-      stderr(`✗ Error: Refusing to run "${command}" against PRODUCTION without confirmation. Pass --yes to proceed.`);
+      stderr(
+        `✗ Error: Refusing to run "${command}" against PRODUCTION without confirmation. Pass --yes to proceed.`,
+      );
       return 1;
     }
-    const ok = await prompter.confirm(`About to run "${command}" against PRODUCTION. Continue? [y/N] `);
+    const ok = await prompter.confirm(
+      `About to run "${command}" against PRODUCTION. Continue? [y/N] `,
+    );
     if (!ok) {
       stderr("Aborted.");
       return 1;
@@ -224,7 +228,8 @@ export async function run(
   // Write calls get a fresh idempotencyKey unless one was given. Generated
   // only now so a dry run or an aborted confirmation never mints an unused key.
   const generatedKey = readOnly ? undefined : ensureIdempotencyKey(request, methodName);
-  if (generatedKey) stderr(`Using idempotencyKey ${generatedKey} (pass --idempotencyKey to retry safely)`);
+  if (generatedKey)
+    stderr(`Using idempotencyKey ${generatedKey} (pass --idempotencyKey to retry safely)`);
 
   // Execute
   const verbose = flags.verbose === true;
@@ -247,7 +252,8 @@ export async function run(
         stdout(JSON.stringify(item, bigIntReplacer));
         count++;
       }
-      if (verbose) stderr(`← ${count} item${count === 1 ? "" : "s"} in ${Date.now() - startedAt} ms`);
+      if (verbose)
+        stderr(`← ${count} item${count === 1 ? "" : "s"} in ${Date.now() - startedAt} ms`);
     } else {
       const value = await (result as Promise<unknown>);
       print(value, { raw, writeFn: stdout });
@@ -260,7 +266,9 @@ export async function run(
   }
 }
 
-async function resolveAuthFromFlags(flags: ReturnType<typeof parseArgs>["flags"]): Promise<ResolvedAuth> {
+async function resolveAuthFromFlags(
+  flags: ReturnType<typeof parseArgs>["flags"],
+): Promise<ResolvedAuth> {
   const config = await load();
   const env = process.env as Record<string, string | undefined>;
   return resolveAuth({ profile: flags.profile, token: flags.token, env: flags.env }, env, config);
@@ -272,7 +280,7 @@ async function runWhoami(
   deps: RunDeps,
   flags: ReturnType<typeof parseArgs>["flags"],
   stdout: (msg: string) => void,
-  stderr: (msg: string) => void
+  stderr: (msg: string) => void,
 ): Promise<number> {
   try {
     const auth = await resolveAuthFromFlags(flags);
@@ -291,7 +299,7 @@ async function runWhoami(
           mainLocationId: merchant?.mainLocationId,
         },
       },
-      { raw: flags.jsonOutput === true, writeFn: stdout }
+      { raw: flags.jsonOutput === true, writeFn: stdout },
     );
     return 0;
   } catch (e: unknown) {
@@ -306,7 +314,7 @@ async function runConfigCommand(
   flags: ReturnType<typeof parseArgs>["flags"],
   prompter: Prompter,
   stdout: (msg: string) => void,
-  stderr: (msg: string) => void
+  stderr: (msg: string) => void,
 ): Promise<number> {
   const subcommand = args[0];
 
@@ -397,7 +405,9 @@ async function runConfigCommand(
       }
       try {
         const wasDefault = await removeProfile(profileName);
-        stdout(`Profile "${profileName}" removed.${wasDefault ? " It was the default; no default is set now." : ""}`);
+        stdout(
+          `Profile "${profileName}" removed.${wasDefault ? " It was the default; no default is set now." : ""}`,
+        );
         return 0;
       } catch (e: unknown) {
         return renderError(e, { writeFn: stderr });

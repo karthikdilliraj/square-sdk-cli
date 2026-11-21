@@ -25,9 +25,7 @@ function readPackageVersion(dir: string): string | undefined {
     const parsed = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as {
       version?: unknown;
     };
-    return typeof parsed.version === "string" && parsed.version
-      ? parsed.version
-      : undefined;
+    return typeof parsed.version === "string" && parsed.version ? parsed.version : undefined;
   } catch {
     return undefined;
   }

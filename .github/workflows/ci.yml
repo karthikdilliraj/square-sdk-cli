@@ -8,27 +8,39 @@ on:
 
 jobs:
   test:
-    name: Typecheck, test, build
-    runs-on: ubuntu-latest
+    name: Lint, typecheck, test, build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
       - run: bun install --frozen-lockfile
+      - run: bun run lint
       - run: bun run typecheck
-      - run: bun test
+      - run: bun run test:coverage
       - run: bun run build
       - uses: actions/upload-artifact@v4
         with:
-          name: dist
+          name: dist-${{ matrix.os }}
           path: dist/
+          if-no-files-found: error
 
   # The published bundle runs on plain node (engines: >=18), so smoke-test it there.
   node-smoke:
     name: Smoke test on node ${{ matrix.node }}
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     strategy:
       matrix:
         node: [18, 20, 22]
@@ -43,10 +55,14 @@ jobs:
       - run: bun install --frozen-lockfile --production
       - uses: actions/download-artifact@v4
         with:
-          name: dist
+          name: dist-ubuntu-latest
           path: dist/
       - name: Help renders without auth
         run: node dist/square.js --help | grep -q "Namespaces:"
+      - name: Version prints
+        run: node dist/square.js --version | grep -q "square-sdk-cli"
+      - name: Search works without auth
+        run: node dist/square.js search payments | grep -q "^payments$"
       - name: Dry run builds a request
         env:
           SQUARE_ACCESS_TOKEN: dummy

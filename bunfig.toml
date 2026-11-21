@@ -1,0 +1,7 @@
+# Bun configuration. `bun test` reads this automatically.
+[test]
+# Mock clients and fixtures live under tests/; they shouldn't count either way.
+coverageSkipTestFiles = true
+
+# Coverage thresholds are enforced by `bun scripts/coverage.ts`
+# (bunfig's coverageThreshold is broken in Bun 1.3.14: it fails every run).

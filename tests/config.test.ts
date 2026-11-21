@@ -1,8 +1,16 @@
-import { describe, it, expect, beforeEach, afterEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as fs from "fs";
-import * as path from "path";
 import * as os from "os";
-import { load, save, setProfile, getProfile, listProfiles, useProfile, removeProfile } from "../src/config";
+import * as path from "path";
+import {
+  getProfile,
+  listProfiles,
+  load,
+  removeProfile,
+  save,
+  setProfile,
+  useProfile,
+} from "../src/config";
 
 function makeTempConfigPath(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sq-cli-test-"));
@@ -58,9 +66,21 @@ describe("config - load validation", () => {
   const cases: Array<[string, unknown, RegExp]> = [
     ["top-level array", [], /expected a JSON object/],
     ["profiles not an object", { profiles: "x" }, /"profiles" must be an object/],
-    ["profile missing token", { profiles: { p: { environment: "sandbox" } } }, /profile "p" is missing a "token"/],
-    ["bad environment", { profiles: { p: { token: "t", environment: "prod" } } }, /environment "prod"/],
-    ["defaultProfile not a string", { profiles: {}, defaultProfile: 1 }, /"defaultProfile" must be a string/],
+    [
+      "profile missing token",
+      { profiles: { p: { environment: "sandbox" } } },
+      /profile "p" is missing a "token"/,
+    ],
+    [
+      "bad environment",
+      { profiles: { p: { token: "t", environment: "prod" } } },
+      /environment "prod"/,
+    ],
+    [
+      "defaultProfile not a string",
+      { profiles: {}, defaultProfile: 1 },
+      /"defaultProfile" must be a string/,
+    ],
   ];
 
   for (const [label, data, pattern] of cases) {

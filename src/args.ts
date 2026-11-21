@@ -138,11 +138,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
   return { positionals, flags, fields };
 }
 
-function handleFlag(
-  key: string,
-  val: string,
-  flags: ParsedFlags
-): boolean {
+function handleFlag(key: string, val: string, flags: ParsedFlags): boolean {
   if (key in BOOL_FLAGS) {
     const flagKey = BOOL_FLAGS[key]!;
     (flags as Record<string, unknown>)[flagKey] = true;

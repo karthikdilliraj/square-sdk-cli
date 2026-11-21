@@ -7,10 +7,7 @@ export class MockSquareError extends Error {
   statusCode: number;
   errors: { category: string; code: string; detail?: string }[];
 
-  constructor(
-    statusCode: number,
-    errors: { category: string; code: string; detail?: string }[]
-  ) {
+  constructor(statusCode: number, errors: { category: string; code: string; detail?: string }[]) {
     super(`Square API error: ${statusCode}`);
     this.name = "SquareError";
     this.statusCode = statusCode;
@@ -20,7 +17,7 @@ export class MockSquareError extends Error {
 
 // Fake Page (async-iterable) that spans two pages
 function makeFakePage(items: unknown[], pageSize = 2) {
-  let page = 0;
+  const page = 0;
   const pages: unknown[][] = [];
   for (let i = 0; i < items.length; i += pageSize) {
     pages.push(items.slice(i, i + pageSize));
@@ -69,7 +66,7 @@ class MockTerminalActionsClient {
         { id: "a1", type: "SAVE_CARD" },
         { id: "a2", type: "SAVE_CARD" },
         { id: "a3", type: "SAVE_CARD" },
-      ])
+      ]),
     );
   }
 

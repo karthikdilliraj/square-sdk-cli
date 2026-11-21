@@ -15,12 +15,10 @@ export interface ClientOptions {
 
 export function createClient(
   auth: Pick<ResolvedAuth, "token" | "environment">,
-  options: ClientOptions = {}
+  options: ClientOptions = {},
 ): SquareClient {
   const environment =
-    auth.environment === "production"
-      ? SquareEnvironment.Production
-      : SquareEnvironment.Sandbox;
+    auth.environment === "production" ? SquareEnvironment.Production : SquareEnvironment.Sandbox;
 
   return new SquareClient({
     token: auth.token,

@@ -41,7 +41,10 @@ function isPage(value: unknown): value is AsyncIterable<unknown> & PageLike {
  * Async generator that yields items from all pages, honoring item/page limits.
  * The next page is only fetched when more items are still wanted.
  */
-async function* iteratePages(firstPage: PageLike, options: ExecuteOptions): AsyncGenerator<unknown> {
+async function* iteratePages(
+  firstPage: PageLike,
+  options: ExecuteOptions,
+): AsyncGenerator<unknown> {
   const { maxItems, maxPages } = options;
   let page: PageLike = firstPage;
   let pages = 1;
@@ -99,7 +102,7 @@ function pageEnvelope(page: PageLike): unknown {
 export function execute(
   method: MethodEntry,
   request: object,
-  options: ExecuteOptions
+  options: ExecuteOptions,
 ): AsyncGenerator<unknown> | Promise<unknown> {
   if (options.rawPage) {
     return (async () => {

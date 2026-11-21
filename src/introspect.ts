@@ -39,7 +39,7 @@ function buildNode(
   name: string,
   instance: object,
   seen: WeakSet<object>,
-  depth: number
+  depth: number,
 ): NamespaceNode {
   const node: NamespaceNode = {
     name,
@@ -67,12 +67,7 @@ function buildNode(
       try {
         const childInstance = (instance as Record<string, unknown>)[propName];
         if (childInstance && typeof childInstance === "object") {
-          const childNode = buildNode(
-            propName,
-            childInstance as object,
-            seen,
-            depth + 1
-          );
+          const childNode = buildNode(propName, childInstance as object, seen, depth + 1);
           node.children.set(propName, childNode);
         }
       } catch {
@@ -88,9 +83,11 @@ function buildNode(
         // Dispatch via instance property lookup at call time so own-property
         // overrides (e.g. injected in tests) are respected.
         fn: (...args: unknown[]) =>
-          ((capturedInstance as Record<string, unknown>)[capturedName] as (...a: unknown[]) => unknown)(
-            ...args
-          ),
+          (
+            (capturedInstance as Record<string, unknown>)[capturedName] as (
+              ...a: unknown[]
+            ) => unknown
+          )(...args),
       });
     }
   }
@@ -110,10 +107,7 @@ export function buildTree(client: object): NamespaceNode {
  * Walk the tree following `segments`, treating every segment as a namespace.
  * Returns the final namespace node, or undefined if any segment is not one.
  */
-export function findNamespace(
-  tree: NamespaceNode,
-  segments: string[]
-): NamespaceNode | undefined {
+export function findNamespace(tree: NamespaceNode, segments: string[]): NamespaceNode | undefined {
   let current = tree;
   for (const seg of segments) {
     const child = current.children.get(seg);
@@ -141,7 +135,7 @@ function editDistance(a: string, b: string): number {
       row[j] = Math.min(
         previous + 1, // deletion
         row[j - 1]! + 1, // insertion
-        diagonal + (a[i - 1] === b[j - 1] ? 0 : 1) // substitution
+        diagonal + (a[i - 1] === b[j - 1] ? 0 : 1), // substitution
       );
       diagonal = previous;
     }
@@ -181,15 +175,9 @@ export function suggestToken(token: string, candidates: Iterable<string>): strin
  * All segments except the last navigate into children (namespaces).
  * The last segment resolves a method on the final namespace node.
  */
-export function resolvePath(
-  tree: NamespaceNode,
-  segments: string[]
-): ResolveResult {
+export function resolvePath(tree: NamespaceNode, segments: string[]): ResolveResult {
   if (segments.length === 0) {
-    const validTokens = [
-      ...tree.children.keys(),
-      ...tree.methods.keys(),
-    ];
+    const validTokens = [...tree.children.keys(), ...tree.methods.keys()];
     return { error: "No path provided. Expected: <namespace> <method>", validTokens };
   }
 
@@ -218,10 +206,7 @@ export function resolvePath(
 
   if (!method) {
     // Could also be a namespace without method - collect valid tokens
-    const validTokens = [
-      ...current.methods.keys(),
-      ...current.children.keys(),
-    ];
+    const validTokens = [...current.methods.keys(), ...current.children.keys()];
     const hint = suggestToken(methodName, validTokens);
     if (current === tree) {
       return {
@@ -301,7 +286,5 @@ export function searchTree(tree: NamespaceNode, term: string, limit = 100): Sear
     return 4;
   };
 
-  return matches
-    .sort((a, b) => rank(a) - rank(b) || a.path.localeCompare(b.path))
-    .slice(0, limit);
+  return matches.sort((a, b) => rank(a) - rank(b) || a.path.localeCompare(b.path)).slice(0, limit);
 }
