@@ -5,6 +5,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
+import { randomUUID } from "crypto";
 
 export interface Profile {
   token: string;
@@ -31,6 +32,8 @@ export async function load(): Promise<Config> {
   if (!fs.existsSync(configPath)) {
     return { profiles: {} };
   }
+
+  ensureOwnerOnlyPermissions(configPath);
 
   const raw = fs.readFileSync(configPath, "utf8");
   let parsed: unknown;
@@ -81,13 +84,46 @@ function validateConfig(parsed: unknown, configPath: string): Config {
   return { ...cfg, profiles } as Config;
 }
 
+/**
+ * The token store must not be readable by other users. New files are created
+ * 0600; this also re-tightens an existing file that lost its mode (e.g. after
+ * being copied or restored from a backup). Best effort — a read-only file
+ * surfaces its own error later.
+ */
+function ensureOwnerOnlyPermissions(configPath: string): void {
+  if (process.platform === "win32") return;
+  try {
+    const mode = fs.statSync(configPath).mode & 0o777;
+    if (mode & 0o077) fs.chmodSync(configPath, 0o600);
+  } catch {
+    // Ignore: reading the file below will report anything that matters.
+  }
+}
+
+/**
+ * Write the config atomically: a crash mid-write must not truncate every saved
+ * profile. The temp file is created next to the target (same filesystem, so
+ * rename is atomic) and renamed into place.
+ */
 export async function save(cfg: Config): Promise<void> {
   const configPath = getConfigPath();
   const dir = path.dirname(configPath);
 
-  fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+
   const content = JSON.stringify(cfg, null, 2);
-  fs.writeFileSync(configPath, content, { mode: 0o600 });
+  const tmpPath = path.join(dir, `.${path.basename(configPath)}.${process.pid}.${randomUUID()}.tmp`);
+  try {
+    fs.writeFileSync(tmpPath, content, { mode: 0o600 });
+    fs.renameSync(tmpPath, configPath);
+  } catch (e) {
+    try {
+      fs.unlinkSync(tmpPath);
+    } catch {
+      // Nothing to clean up.
+    }
+    throw e;
+  }
 }
 
 export async function setProfile(name: string, partial: Partial<Profile>): Promise<void> {

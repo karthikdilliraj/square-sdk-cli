@@ -19,6 +19,12 @@ All notable changes to this project are documented here. The format follows
   aborted production confirmation no longer mints one.
 - A closed pipe (`square payments list --stream | head -5`) exits quietly with
   status 0 instead of printing an EPIPE stack trace.
+- Config saves are atomic (temp file + rename), so an interrupted write can no
+  longer truncate every saved profile.
+- The config file is created `0600` inside a `0700` directory, and an existing
+  file with looser permissions is tightened on read.
+- Buffered stdout/stderr is flushed before exiting, so large piped output is no
+  longer truncated by `process.exit()`.
 
 ### Added
 

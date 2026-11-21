@@ -31,7 +31,9 @@ npm install -g .      # or: bun link
 
 Credentials are stored on your machine at
 `~/.config/square-cli/config.json` (XDG-aware; override with `SQUARE_CLI_CONFIG`).
-Tokens are written with `0600` permissions and masked when read back.
+Writes are atomic (temp file + rename), so a crash can't truncate your saved
+profiles. Tokens are written with `0600` permissions — an existing file with
+looser permissions is tightened on read — and masked when read back.
 
 ```bash
 square config set sandbox --env sandbox      # prompts for the token (hidden)

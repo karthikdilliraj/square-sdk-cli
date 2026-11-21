@@ -103,6 +103,49 @@ describe("config - save", () => {
   });
 });
 
+describe("config - atomic saves and permissions", () => {
+  const onWindows = process.platform === "win32";
+
+  it("leaves no temp files behind after saving", async () => {
+    await save({ profiles: { p: { token: "t", environment: "sandbox" } } });
+    expect(fs.readdirSync(path.dirname(tmpPath))).toEqual(["config.json"]);
+  });
+
+  it("creates the profile directory with mode 0700", async () => {
+    if (onWindows) return;
+    const deepPath = path.join(path.dirname(tmpPath), "nested", "config.json");
+    process.env["SQUARE_CLI_CONFIG"] = deepPath;
+    await save({ profiles: {} });
+    expect(fs.statSync(path.dirname(deepPath)).mode & 0o777).toBe(0o700);
+  });
+
+  it("re-tightens a loosely-permissioned config file on load", async () => {
+    if (onWindows) return;
+    fs.writeFileSync(tmpPath, JSON.stringify({ profiles: {} }));
+    fs.chmodSync(tmpPath, 0o644);
+    await load();
+    expect(fs.statSync(tmpPath).mode & 0o777).toBe(0o600);
+  });
+
+  it("leaves an owner-only file alone", async () => {
+    if (onWindows) return;
+    fs.writeFileSync(tmpPath, JSON.stringify({ profiles: {} }));
+    fs.chmodSync(tmpPath, 0o400);
+    await load();
+    expect(fs.statSync(tmpPath).mode & 0o777).toBe(0o400);
+  });
+
+  it("replaces the file rather than rewriting it in place", async () => {
+    await setProfile("p", { token: "one", environment: "sandbox" });
+    const before = fs.statSync(tmpPath).ino;
+    await setProfile("p", { token: "two" });
+    const after = fs.statSync(tmpPath).ino;
+    // A rename installs a new inode; an in-place write keeps the old one.
+    if (!onWindows) expect(after).not.toBe(before);
+    expect((await getProfile("p"))?.token).toBe("two");
+  });
+});
+
 describe("config - setProfile / getProfile", () => {
   it("set and get round-trip", async () => {
     await setProfile("prod", { token: "prodtok", environment: "production" });
