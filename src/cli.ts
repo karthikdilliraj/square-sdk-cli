@@ -5,7 +5,7 @@
 import type { SquareClient } from "square";
 import { parseArgs } from "./args.ts";
 import { buildRequest, readJsonArg, ensureIdempotencyKey } from "./merge.ts";
-import { load, setProfile, getProfile, useProfile, removeProfile } from "./config.ts";
+import { load, setProfile, getProfile, useProfile, removeProfile, type Profile } from "./config.ts";
 import { resolveAuth, parseEnvironment, type ResolvedAuth } from "./auth.ts";
 import { createClient as defaultCreateClient } from "./client.ts";
 import { buildTree, findNamespace, resolvePath, isReadOnlyMethod } from "./introspect.ts";
@@ -13,6 +13,7 @@ import { execute } from "./execute.ts";
 import { print, renderError, bigIntReplacer } from "./output.ts";
 import { renderRootHelp, renderNamespaceHelp, renderMethodHelp } from "./help.ts";
 import { terminalPrompter, type Prompter } from "./prompt.ts";
+import { getVersions, formatVersionLine } from "./version.ts";
 
 export interface RunDeps {
   createClient: (auth: Pick<ResolvedAuth, "token" | "environment">) => SquareClient;
@@ -45,6 +46,16 @@ export async function run(
 
   const parsed = parseArgs(argv);
   const { positionals, flags, fields } = parsed;
+
+  // ---- --version (no auth required) ----
+  if (flags.version) {
+    if (flags.jsonOutput) {
+      stdout(JSON.stringify(getVersions()));
+    } else {
+      stdout(formatVersionLine(getVersions()));
+    }
+    return 0;
+  }
 
   // ---- Config subcommands (no auth required) ----
   if (positionals[0] === "config") {
@@ -137,10 +148,8 @@ export async function run(
   const methodName = resolveResult.method.name;
   const readOnly = isReadOnlyMethod(methodName);
 
-  // Write calls get a fresh idempotencyKey unless one was given
-  const generatedKey = readOnly ? undefined : ensureIdempotencyKey(request, methodName);
-
-  // Dry run: show what would be sent, without calling the API
+  // Dry run: show what would be sent, without calling the API.
+  // No idempotency key is generated: it would never reach the API.
   if (flags.dryRun) {
     print(
       {
@@ -168,6 +177,9 @@ export async function run(
     }
   }
 
+  // Write calls get a fresh idempotencyKey unless one was given. Generated
+  // only now so a dry run or an aborted confirmation never mints an unused key.
+  const generatedKey = readOnly ? undefined : ensureIdempotencyKey(request, methodName);
   if (generatedKey) stderr(`Using idempotencyKey ${generatedKey} (pass --idempotencyKey to retry safely)`);
 
   // Execute
@@ -248,7 +260,7 @@ async function runConfigCommand(
         stderr("Usage: square config set <profile> --token <token> [--env <environment>]");
         return 1;
       }
-      let environment: "sandbox" | "production" = "sandbox";
+      let environment: "sandbox" | "production" | undefined;
       try {
         if (flags.env !== undefined) environment = parseEnvironment(String(flags.env), "--env");
       } catch (e: unknown) {
@@ -277,7 +289,11 @@ async function runConfigCommand(
         return 1;
       }
 
-      await setProfile(profileName, { token, environment });
+      // Only send the environment when --env was given: setProfile merges over
+      // the existing profile, so a plain token rotation must not reset it.
+      const partial: Partial<Profile> = { token };
+      if (environment !== undefined) partial.environment = environment;
+      await setProfile(profileName, partial);
       stdout(`Profile "${profileName}" saved.`);
       return 0;
     }

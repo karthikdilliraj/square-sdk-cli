@@ -241,8 +241,19 @@ describe("cli integration - dry run", () => {
       dryRun: true,
       environment: "sandbox",
       method: "payments create",
-      request: { amountMoney: { amount: 100 }, idempotencyKey: expect.any(String) },
+      request: { amountMoney: { amount: 100 } },
     });
+  });
+
+  it("does not generate an idempotency key for a write", async () => {
+    const output: string[] = [];
+    const exitCode = await run(
+      ["payments", "create", "--amountMoney.amount", "100", "--dry-run", "--json-output"],
+      deps,
+      (msg) => output.push(msg)
+    );
+    expect(exitCode).toBe(0);
+    expect(JSON.parse(output[0]!).request.idempotencyKey).toBeUndefined();
   });
 });
 
@@ -291,6 +302,110 @@ describe("cli integration - environment validation", () => {
     );
     expect(exitCode).toBe(1);
     expect(errOut.join("\n")).toMatch(/Invalid --env/);
+  });
+});
+
+describe("cli integration - config set environment preservation", () => {
+  function savedProfile(name: string): { token: string; environment: string } {
+    return JSON.parse(fs.readFileSync(tmpConfigPath, "utf8")).profiles[name];
+  }
+
+  it("keeps a profile's environment when --env is omitted", async () => {
+    await run(["config", "set", "prod", "--token", "t1", "--env", "production"], deps, () => {});
+    const exitCode = await run(["config", "set", "prod", "--token", "t2"], deps, () => {});
+    expect(exitCode).toBe(0);
+    expect(savedProfile("prod")).toEqual({ token: "t2", environment: "production" });
+  });
+
+  it("still defaults a new profile to sandbox", async () => {
+    await run(["config", "set", "fresh", "--token", "t"], deps, () => {});
+    expect(savedProfile("fresh")).toEqual({ token: "t", environment: "sandbox" });
+  });
+});
+
+describe("cli integration - profile environment override", () => {
+  beforeEach(async () => {
+    await run(["config", "set", "sbx", "--token", "t1", "--env", "sandbox"], deps, () => {});
+    await run(["config", "set", "prod", "--token", "t2", "--env", "production"], deps, () => {});
+  });
+
+  /** Records every auth object passed to createClient; the last one is the real call. */
+  function capturingAuth() {
+    const calls: { token: string; environment: string }[] = [];
+    const depsWithAuth = {
+      createClient: (auth: any) => {
+        calls.push(auth);
+        return createMockClient() as any;
+      },
+    };
+    return { calls, deps: depsWithAuth };
+  }
+
+  const lastAuth = (calls: { token: string; environment: string }[]) => calls[calls.length - 1];
+
+  it("uses the profile's environment when --env is absent", async () => {
+    const spy = capturingAuth();
+    const exitCode = await run(["locations", "list", "--profile", "prod"], spy.deps, () => {});
+    expect(exitCode).toBe(0);
+    expect(lastAuth(spy.calls)).toMatchObject({ token: "t2", environment: "production" });
+  });
+
+  it("lets an explicit --env override the profile's environment", async () => {
+    const spy = capturingAuth();
+    const exitCode = await run(
+      ["locations", "list", "--profile", "sbx", "--env", "production"],
+      spy.deps,
+      () => {}
+    );
+    expect(exitCode).toBe(0);
+    expect(lastAuth(spy.calls)).toMatchObject({ token: "t1", environment: "production" });
+  });
+
+  it("rejects an invalid --env on a profile instead of ignoring it", async () => {
+    const errOut: string[] = [];
+    const exitCode = await run(
+      ["locations", "list", "--profile", "prod", "--env", "prod"],
+      deps,
+      () => {},
+      (msg) => errOut.push(msg)
+    );
+    expect(exitCode).toBe(1);
+    expect(errOut.join("\n")).toMatch(/Invalid --env "prod"/);
+  });
+
+  it("does not let SQUARE_ENVIRONMENT redirect a profile", async () => {
+    process.env["SQUARE_ENVIRONMENT"] = "production";
+    const spy = capturingAuth();
+    const exitCode = await run(["locations", "list", "--profile", "sbx"], spy.deps, () => {});
+    expect(exitCode).toBe(0);
+    expect(lastAuth(spy.calls)).toMatchObject({ environment: "sandbox" });
+  });
+});
+
+describe("cli integration - version", () => {
+  it("--version prints CLI and SDK versions without auth", async () => {
+    delete process.env["SQUARE_ACCESS_TOKEN"];
+    const output: string[] = [];
+    const exitCode = await run(["--version"], deps, (msg) => output.push(msg));
+    expect(exitCode).toBe(0);
+    expect(output.join("\n")).toMatch(
+      /^square-sdk-cli \d+\.\d+\.\d+ \(Square SDK \d+\.\d+\.\d+\)$/
+    );
+  });
+
+  it("--version --json-output prints machine-readable versions", async () => {
+    const output: string[] = [];
+    const exitCode = await run(["--version", "--json-output"], deps, (msg) => output.push(msg));
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(output[0]!);
+    expect(parsed.cli).toMatch(/^\d+\.\d+\.\d+/);
+    expect(parsed.sdk).toMatch(/^\d+\.\d+\.\d+/);
+  });
+
+  it("root help mentions --version", async () => {
+    const output: string[] = [];
+    await run(["--help"], deps, (msg) => output.push(msg));
+    expect(output.join("\n")).toContain("--version");
   });
 });
 

@@ -37,10 +37,24 @@ function resolveEnvironment(flags: AuthFlags, env: EnvVars): "sandbox" | "produc
 }
 
 /**
+ * Environment for a config profile: the profile's own environment, unless an
+ * explicit --env flag overrides it.
+ */
+function resolveProfileEnvironment(
+  flags: AuthFlags,
+  profileEnvironment: "sandbox" | "production"
+): "sandbox" | "production" {
+  if (flags.env === undefined) return profileEnvironment;
+  return parseEnvironment(String(flags.env), "--env");
+}
+
+/**
  * Resolve auth with precedence:
- * 1) --profile flag (must exist in config)
+ * 1) --profile flag (must exist in config); an explicit --env overrides the
+ *    profile's environment, while SQUARE_ENVIRONMENT does not (a profile's
+ *    environment is deliberate, an ambient variable should not redirect it)
  * 2) --token flag or SQUARE_ACCESS_TOKEN env var (env SQUARE_ENVIRONMENT or --env, default "sandbox")
- * 3) default profile from config
+ * 3) default profile from config (same --env override as 1)
  */
 export function resolveAuth(
   flags: AuthFlags,
@@ -55,7 +69,11 @@ export function resolveAuth(
         `Profile "${flags.profile}" not found. Available profiles: ${Object.keys(config.profiles).join(", ") || "(none)"}`
       );
     }
-    return { token: profile.token, environment: profile.environment, source: `profile "${flags.profile}"` };
+    return {
+      token: profile.token,
+      environment: resolveProfileEnvironment(flags, profile.environment),
+      source: `profile "${flags.profile}"`,
+    };
   }
 
   // 2. --token flag or SQUARE_ACCESS_TOKEN
@@ -71,7 +89,7 @@ export function resolveAuth(
     if (profile) {
       return {
         token: profile.token,
-        environment: profile.environment,
+        environment: resolveProfileEnvironment(flags, profile.environment),
         source: `default profile "${config.defaultProfile}"`,
       };
     }

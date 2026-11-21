@@ -16,6 +16,7 @@ Global flags:
   --max-items <n>       Stop paging after n items
   --max-pages <n>       Stop paging after n pages
   --yes                 Skip the confirmation for write calls in production
+  --version             Print the CLI and Square SDK versions
   --help                Show this help message
 `.trim();
 

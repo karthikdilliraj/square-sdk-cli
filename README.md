@@ -50,6 +50,10 @@ history. `--token <ACCESS_TOKEN>` inline still works.
 Auth resolution order: `--profile <name>` → `--token` / `SQUARE_ACCESS_TOKEN`
 env → default profile.
 
+An explicit `--env` overrides the environment stored in the selected profile.
+`SQUARE_ENVIRONMENT` is only consulted when the token comes from `--token` or
+`SQUARE_ACCESS_TOKEN` — it never redirects a profile.
+
 ## Usage
 
 ```
@@ -101,10 +105,11 @@ cat payment.json | square payments create --json -
 | `--json '<j>'`  | JSON request body (`@file` or `-` for stdin) |
 | `--json-output` | compact JSON output (no pretty print)       |
 | `--stream`      | stream pageable results as NDJSON           |
-| `--dry-run`     | print the request without sending it        |
+| `--dry-run`     | print the request without sending it (no idempotency key is generated) |
 | `--max-items <n>` | stop paging after n items                 |
 | `--max-pages <n>` | stop paging after n pages                 |
 | `--yes`         | skip the production write confirmation      |
+| `--version`     | print the CLI and Square SDK versions       |
 | `--help`        | show help                                   |
 
 ### Safety defaults
@@ -116,6 +121,7 @@ cat payment.json | square payments create --json -
 - **Automatic idempotency keys.** Write calls without an `idempotencyKey` get a
   random one, printed to stderr. To retry safely, pass it back with
   `--idempotencyKey <key>`. Endpoints that don't use a key ignore it.
+  `--dry-run` and aborted confirmations never generate one.
 - **Paging limits.** `list` calls fetch every page by default. Cap them with
   `--max-items` or `--max-pages`. (`--limit` is still the API's own page-size
   field.)
@@ -133,8 +139,8 @@ bun bin/square.ts <namespace> <method>
 
 ## Supported Square SDK versions
 
-Currently built and tested against **`square@44.1.0`** (pinned `^44.1.0` in
-`package.json`).
+Currently built and tested against **`square@44.2.1`** (`^44.2.1` in
+`package.json`, so any 44.x release is accepted).
 
 The CLI is **version-agnostic by design**: it reads the SDK's namespace/method
 tree at runtime, so new Square APIs, methods, and fields are picked up

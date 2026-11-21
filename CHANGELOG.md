@@ -4,6 +4,27 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/) (pre-1.0: minor versions may break).
 
+## [Unreleased]
+
+### Fixed
+
+- `config set <profile> --token <new>` no longer resets the profile's
+  environment to `sandbox` when `--env` is omitted. Existing environments are
+  preserved; new profiles still default to sandbox.
+- `--env` now overrides the environment of the selected `--profile` (it used to
+  be silently ignored). `SQUARE_ENVIRONMENT` still applies only when the token
+  comes from `--token`/`SQUARE_ACCESS_TOKEN`, so an ambient variable cannot
+  redirect a profile.
+- `--dry-run` no longer shows an `idempotencyKey` that was never used, and an
+  aborted production confirmation no longer mints one.
+- A closed pipe (`square payments list --stream | head -5`) exits quietly with
+  status 0 instead of printing an EPIPE stack trace.
+
+### Added
+
+- `square --version` prints the CLI and Square SDK versions (with
+  `--json-output`, as JSON).
+
 ## [0.2.0] - 2026-10-12
 
 ### ⚠️ Behavior changes (check scripts that use the CLI)

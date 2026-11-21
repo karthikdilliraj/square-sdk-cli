@@ -14,6 +14,7 @@ export interface ParsedFlags {
   dryRun?: true;
   yes?: true;
   help?: true;
+  version?: true;
 }
 
 export interface FieldEntry {
@@ -44,6 +45,7 @@ const BOOL_FLAGS: Record<string, keyof ParsedFlags> = {
   "dry-run": "dryRun",
   yes: "yes",
   help: "help",
+  version: "version",
 };
 
 export function parseArgs(argv: string[]): ParsedArgs {
