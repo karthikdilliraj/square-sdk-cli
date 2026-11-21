@@ -23,6 +23,32 @@ function coerce(value: string): unknown {
 /** Path segments that would reach Object.prototype instead of the request. */
 const FORBIDDEN_SEGMENTS = new Set(["__proto__", "constructor", "prototype"]);
 
+/** Human-readable description of a value's shape, for conflict messages. */
+function describeKind(value: unknown): string {
+  if (Array.isArray(value)) return "an array";
+  switch (typeof value) {
+    case "string":
+      return "a string";
+    case "number":
+      return "a number";
+    case "boolean":
+      return "a boolean";
+    case "object":
+      return "an object";
+    default:
+      return `a ${typeof value}`;
+  }
+}
+
+/** Error for a field path that cannot be applied over the existing body. */
+function pathConflict(path: string, prefix: string, existing: unknown, wantsArray: boolean): Error {
+  const expected = wantsArray ? "an array" : "an object";
+  return new Error(
+    `Invalid field path "${path}": "${prefix}" is already ${describeKind(existing)}, ` +
+      `but the path needs ${expected} there. Pass the whole value with --json instead.`
+  );
+}
+
 /**
  * Deep-set a value at a dot-separated path on an object.
  * Numeric path segments create array indices.
@@ -39,10 +65,16 @@ function deepSet(obj: Record<string, unknown>, path: string, value: unknown): vo
   for (let i = 0; i < segments.length - 1; i++) {
     const seg = segments[i]!;
     const nextSeg = segments[i + 1]!;
-    const isNextNumeric = /^\d+$/.test(nextSeg);
+    const wantsArray = /^\d+$/.test(nextSeg);
+    const existing = current[seg];
 
-    if (current[seg] === undefined || current[seg] === null) {
-      current[seg] = isNextNumeric ? [] : {};
+    if (existing === undefined || existing === null) {
+      current[seg] = wantsArray ? [] : {};
+    } else if (typeof existing !== "object") {
+      // Setting a property on a primitive would throw a bare TypeError.
+      throw pathConflict(path, segments.slice(0, i + 1).join("."), existing, wantsArray);
+    } else if (wantsArray !== Array.isArray(existing)) {
+      throw pathConflict(path, segments.slice(0, i + 1).join("."), existing, wantsArray);
     }
     current = current[seg] as Record<string, unknown>;
   }

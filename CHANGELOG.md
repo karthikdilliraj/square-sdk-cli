@@ -25,6 +25,15 @@ All notable changes to this project are documented here. The format follows
   file with looser permissions is tightened on read.
 - Buffered stdout/stderr is flushed before exiting, so large piped output is no
   longer truncated by `process.exit()`.
+- A `--field` path that conflicts with the existing body reports which parent
+  conflicts (`"a.b" is already a number`) instead of throwing a bare
+  `TypeError`, and no longer silently loses writes into an array.
+- Method and namespace help no longer print the internal arity number.
+
+### Added
+
+- `--` ends flag parsing, and `--field=value` is documented for values that
+  start with `--` (e.g. `--note=--hello`).
 
 ### Added
 

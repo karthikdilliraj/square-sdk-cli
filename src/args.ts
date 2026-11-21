@@ -61,6 +61,12 @@ export function parseArgs(argv: string[]): ParsedArgs {
   while (i < argv.length) {
     const arg = argv[i]!;
 
+    // `--` ends flag parsing: the rest are namespace/method tokens.
+    if (arg === "--") {
+      positionals.push(...argv.slice(i + 1));
+      break;
+    }
+
     if (arg.startsWith("--")) {
       // Strip leading --
       const body = arg.slice(2);

@@ -91,6 +91,15 @@ square customers list --sortField DEFAULT --sortOrder ASC --stream
   numeric path segments create arrays; values are JSON-coerced, falling back to string)
 - `--field.path:str value` — same, but the value is always kept as a string
   (e.g. `--address.postalCode:str 94103`, which would otherwise become a number)
+- `--field.path=value` — same as the space form, and the way to pass a value
+  that starts with `--` (e.g. `--note=--hello`)
+- `--` — ends flag parsing; every later token is treated as a namespace or
+  method name
+
+A field whose name matches a global flag (`token`, `env`, `json`, `profile`,
+`stream`, `raw-page`, `dry-run`, `max-items`, `max-pages`, `yes`, `verbose`,
+`json-output`, `help`, `version`) can't be set with `--name`; pass it through
+`--json` instead.
 
 ```bash
 square payments create --json @payment.json --dry-run   # preview, nothing sent

@@ -96,8 +96,7 @@ export async function run(
       stdout(
         renderMethodHelp(
           positionals.slice(0, -1).join(" "),
-          shapeResult.method.name,
-          shapeResult.method.arity
+          shapeResult.method.name
         )
       );
     }

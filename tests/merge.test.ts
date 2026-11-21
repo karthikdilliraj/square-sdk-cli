@@ -64,6 +64,31 @@ describe("buildRequest - fields only", () => {
   });
 });
 
+describe("buildRequest - field path conflicts", () => {
+  it("names the conflicting parent instead of throwing a TypeError", () => {
+    expect(() =>
+      buildRequest('{"a":{"b":1}}', [{ path: "a.b.c", value: "2" }])
+    ).toThrow(/Invalid field path "a\.b\.c": "a\.b" is already a number/);
+  });
+
+  it("rejects indexing into an object", () => {
+    expect(() => buildRequest('{"a":{}}', [{ path: "a.0", value: "1" }])).toThrow(
+      /already an object, but the path needs an array/
+    );
+  });
+
+  it("rejects a key on an array (JSON would drop it)", () => {
+    expect(() => buildRequest('{"a":[]}', [{ path: "a.b", value: "1" }])).toThrow(
+      /already an array, but the path needs an object/
+    );
+  });
+
+  it("still writes through matching containers", () => {
+    const result = buildRequest('{"a":[{"name":"x"}]}', [{ path: "a.0.name", value: "y" }]);
+    expect(result).toEqual({ a: [{ name: "y" }] });
+  });
+});
+
 describe("buildRequest - deep merge (fields override json)", () => {
   it("fields override json values at same path", () => {
     const result = buildRequest('{"amount":50}', [{ path: "amount", value: "100" }]);

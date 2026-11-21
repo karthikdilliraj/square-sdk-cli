@@ -73,8 +73,8 @@ export function renderNamespaceHelp(node: NamespaceNode, path: string = node.nam
 
   if (node.methods.size > 0) {
     lines.push("Methods:");
-    for (const [name, method] of node.methods) {
-      lines.push(`  ${path} ${name}  (arity: ${method.arity})`);
+    for (const [name] of node.methods) {
+      lines.push(`  ${path} ${name}`);
     }
     lines.push("");
   }
@@ -87,7 +87,7 @@ export function renderNamespaceHelp(node: NamespaceNode, path: string = node.nam
 /**
  * Render method help: structural usage with --json and --field hints.
  */
-export function renderMethodHelp(namespaceName: string, methodName: string, arity: number): string {
+export function renderMethodHelp(namespaceName: string, methodName: string): string {
   const lines: string[] = [];
   lines.push(`Method: ${namespaceName} ${methodName}`);
   lines.push("");
@@ -100,9 +100,9 @@ export function renderMethodHelp(namespaceName: string, methodName: string, arit
   lines.push(`                               e.g. --amountMoney.amount 100`);
   lines.push("  --<field.path>:str <value>   Same, but keep the value a string (no JSON coercion)");
   lines.push(`                               e.g. --address.postalCode:str 94103`);
+  lines.push("  --<field.path>=<value>       Same, for values that start with -- (e.g. --note=--hi)");
   lines.push("");
-  lines.push(`Note: arity hint = ${arity} (optional params may not be counted)`);
-  lines.push("      Always pass a request object (even if empty).");
+  lines.push("Always pass a request object (even if it is empty).");
   lines.push("");
   lines.push(GLOBAL_FLAGS);
 

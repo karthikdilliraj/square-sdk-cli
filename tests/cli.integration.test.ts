@@ -93,6 +93,13 @@ describe("cli integration - help", () => {
     expect(combined).toMatch(/list/i);
     expect(combined).toMatch(/create/i);
   });
+
+  it("help does not leak implementation details like arity", async () => {
+    const output: string[] = [];
+    await run(["payments"], deps, (msg) => output.push(msg));
+    await run(["payments", "create", "--help"], deps, (msg) => output.push(msg));
+    expect(output.join("\n")).not.toContain("arity");
+  });
 });
 
 describe("cli integration - API calls", () => {
@@ -281,6 +288,29 @@ describe("cli integration - --json sources", () => {
     );
     expect(exitCode).toBe(1);
     expect(errOut.join("\n")).toMatch(/Cannot read --json file/);
+  });
+
+  it("keeps a field value that starts with --", async () => {
+    const output: string[] = [];
+    const exitCode = await run(
+      ["payments", "create", "--note=--hello", "--dry-run", "--json-output"],
+      deps,
+      (msg) => output.push(msg)
+    );
+    expect(exitCode).toBe(0);
+    expect(JSON.parse(output[0]!).request).toEqual({ note: "--hello" });
+  });
+
+  it("reports a field path conflict clearly", async () => {
+    const errOut: string[] = [];
+    const exitCode = await run(
+      ["payments", "create", "--json", '{"a":{"b":1}}', "--a.b.c", "2"],
+      deps,
+      () => {},
+      (msg) => errOut.push(msg)
+    );
+    expect(exitCode).toBe(1);
+    expect(errOut.join("\n")).toMatch(/Invalid field path "a\.b\.c".*already a number/);
   });
 });
 

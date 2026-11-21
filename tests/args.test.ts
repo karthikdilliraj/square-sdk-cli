@@ -109,3 +109,25 @@ describe("parseArgs - mixed", () => {
     expect(result.fields).toContainEqual({ path: "amountMoney.amount", value: "100" });
   });
 });
+
+describe("parseArgs - values that start with --", () => {
+  it("uses the = form to keep a leading -- in a field value", () => {
+    const result = parseArgs(["payments", "create", "--note=--hello"]);
+    expect(result.positionals).toEqual(["payments", "create"]);
+    expect(result.fields).toContainEqual({ path: "note", value: "--hello" });
+  });
+
+  it("-- ends flag parsing; later tokens are positionals", () => {
+    const result = parseArgs(["--", "--not-a-flag", "list", "--verbose"]);
+    expect(result.positionals).toEqual(["--not-a-flag", "list", "--verbose"]);
+    expect(result.flags).toEqual({});
+    expect(result.fields).toEqual([]);
+  });
+
+  it("does not treat the token after -- as a flag value", () => {
+    const result = parseArgs(["payments", "create", "--note", "--", "rest"]);
+    // `--note` has no value of its own, so it becomes a boolean field.
+    expect(result.fields).toContainEqual({ path: "note", value: "true" });
+    expect(result.positionals).toEqual(["payments", "create", "rest"]);
+  });
+});
