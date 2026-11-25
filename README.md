@@ -285,12 +285,22 @@ Pushing a version tag publishes to npm with
 [provenance](https://docs.npmjs.com/generating-provenance-statements):
 
 ```bash
-npm version patch        # bumps package.json and creates the tag
-git push --follow-tags
+npm version patch -m "v%s"        # bumps package.json, commits, tags v0.3.1
+git push origin main
+git push origin v0.3.1            # tag push triggers the Release workflow
 ```
 
-The tag must match `package.json` (`v0.2.1` ↔ `0.2.1`) or the workflow fails.
-It needs an `NPM_TOKEN` repository secret.
+The tag must match `package.json` (`v0.3.1` ↔ `0.3.1`) or the workflow fails.
+
+Authentication uses npm **Trusted Publishing** (OIDC) — no `NPM_TOKEN` secret
+and no 2FA token to rotate. One-time setup on npmjs.com: package
+`square-sdk-cli` → **Settings → Trusted publishing → Add publisher** →
+GitHub Actions, owner `karthikdilliraj`, repository `square-sdk-cli`, workflow
+`release.yml` (no environment). The workflow requires npm ≥ 11.5.1 and upgrades
+npm itself.
+
+`npm version` creates a lightweight tag, which `git push --follow-tags` skips —
+push the tag explicitly as shown.
 
 ## Supported Square SDK versions
 

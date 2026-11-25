@@ -69,7 +69,8 @@ All notable changes to this project are documented here. The format follows
   `--version` and `search`.
 - The weekly newest-SDK workflow now builds the bundle and smoke-tests it on
   node, so bundle-only breakage is caught too.
-- Pushing a `v*` tag publishes to npm with provenance; the tag must match
+- Pushing a `v*` tag publishes to npm with provenance via npm Trusted
+  Publishing (OIDC), so no `NPM_TOKEN` secret is needed; the tag must match
   `package.json`.
 - `run()` takes one options object (`{ deps, stdout, stderr }`) instead of four
   positional parameters.

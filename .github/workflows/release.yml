@@ -1,17 +1,21 @@
 name: Release
 
 # Publish to npm when a version tag is pushed:
-#   npm version patch && git push --follow-tags
+#   npm version patch -m "v%s"
+#   git push origin main && git push origin v<version>
 #
-# Requires an NPM_TOKEN repository secret. Provenance is generated from the
-# GitHub Actions OIDC token, so no other secrets are needed.
+# Uses npm Trusted Publishing (OIDC): no NPM_TOKEN secret. Configure it once at
+# npmjs.com → package square-sdk-cli → Settings → Trusted publishing:
+#   publisher GitHub Actions, owner karthikdilliraj, repo square-sdk-cli,
+#   workflow release.yml (no environment).
+# Requires npm >= 11.5.1, which is why npm is upgraded below.
 on:
   push:
     tags: ["v*"]
 
 permissions:
   contents: read
-  id-token: write # npm provenance
+  id-token: write # required for trusted publishing and provenance
 
 jobs:
   publish:
@@ -24,8 +28,11 @@ jobs:
           bun-version: 1.3.14
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
-          registry-url: https://registry.npmjs.org
+          node-version: 24
+      # Node 24 ships npm 11.x; installing explicitly keeps the trusted
+      # publishing floor (11.5.1) and prints the version used.
+      - run: npm install -g npm@^11
+      - run: npm --version
       - run: bun install --frozen-lockfile
 
       - name: Tag must match package.json version
@@ -42,8 +49,8 @@ jobs:
       - run: bun run test:coverage
       - run: bun run build
 
+      # Trusted publishing authenticates with the OIDC token from the
+      # id-token permission above; do not set NODE_AUTH_TOKEN here.
       # prepublishOnly re-runs lint/typecheck/build/test as a final gate.
       - name: Publish to npm
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
