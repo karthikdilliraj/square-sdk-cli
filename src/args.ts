@@ -11,12 +11,17 @@ export interface ParsedFlags {
   maxPages?: string;
   timeout?: string;
   retry?: string;
+  select?: string;
+  output?: string;
   jsonOutput?: true;
   stream?: true;
   rawPage?: true;
   dryRun?: true;
   yes?: true;
   verbose?: true;
+  keychain?: true;
+  offline?: true;
+  table?: true;
   help?: true;
   version?: true;
 }
@@ -42,6 +47,8 @@ const STRING_FLAGS: Record<string, keyof ParsedFlags> = {
   "max-pages": "maxPages",
   timeout: "timeout",
   retry: "retry",
+  select: "select",
+  output: "output",
 };
 
 // Reserved global flags that are bare booleans
@@ -52,6 +59,9 @@ const BOOL_FLAGS: Record<string, keyof ParsedFlags> = {
   "dry-run": "dryRun",
   yes: "yes",
   verbose: "verbose",
+  keychain: "keychain",
+  offline: "offline",
+  table: "table",
   help: "help",
   version: "version",
 };

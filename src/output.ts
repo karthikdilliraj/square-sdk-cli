@@ -14,19 +14,22 @@ export interface PrintOptions {
   writeFn?: (msg: string) => void;
 }
 
+/** Serialize a result the way `--json-output` (raw) or the default (pretty) wants. */
+export function formatJson(value: unknown, raw = false): string {
+  return raw ? JSON.stringify(value, bigIntReplacer) : JSON.stringify(value, bigIntReplacer, 2);
+}
+
 export function print(value: unknown, options: PrintOptions = {}): void {
   const write = options.writeFn ?? ((msg: string) => process.stdout.write(msg + "\n"));
-  if (options.raw) {
-    write(JSON.stringify(value, bigIntReplacer));
-  } else {
-    write(JSON.stringify(value, bigIntReplacer, 2));
-  }
+  write(formatJson(value, options.raw === true));
 }
 
 export interface RenderErrorOptions {
   writeFn?: (msg: string) => void;
   /** Also print the raw error body, cause, or stack. */
   verbose?: boolean;
+  /** Emit a machine-readable JSON error instead of prose. */
+  json?: boolean;
 }
 
 /** Headers Square has used for the request id, in order of preference. */
@@ -59,6 +62,19 @@ export function getRequestId(err: SquareError): string | undefined {
     }
   }
   return undefined;
+}
+
+/**
+ * Cloudflare trace id from the response headers. Square's v2 APIs do not send a
+ * `request-id` header or a `request_id` body field, but `cf-ray` is present and
+ * is what support can use to trace a call.
+ */
+export function getTraceId(err: SquareError): string | undefined {
+  const headers = err.rawResponse as
+    | { headers?: { get?: (name: string) => string | null } }
+    | undefined;
+  const value = headers?.headers?.get?.("cf-ray");
+  return value || undefined;
 }
 
 /** Human-readable reason phrases for the HTTP status codes Square returns. */
@@ -130,6 +146,11 @@ function camelize(field: string): string {
 export function renderError(err: unknown, options: RenderErrorOptions = {}): number {
   const write = options.writeFn ?? ((msg: string) => process.stderr.write(msg + "\n"));
 
+  if (options.json) {
+    write(JSON.stringify(errorPayload(err, options.verbose === true), bigIntReplacer));
+    return 1;
+  }
+
   if (err instanceof SquareError) {
     const status = err.statusCode;
     const reason = status ? STATUS_REASON[status] : undefined;
@@ -151,6 +172,8 @@ export function renderError(err: unknown, options: RenderErrorOptions = {}): num
     }
 
     if (options.verbose) {
+      const traceId = getTraceId(err);
+      if (traceId) write(`  trace id: ${traceId}`);
       if (err.body !== undefined) {
         write("");
         write("  body:");
@@ -179,4 +202,105 @@ function prettyJson(value: unknown): string[] {
   } catch {
     return [String(value)];
   }
+}
+
+/** Read a dotted path out of an object. */
+function getPath(value: unknown, path: string): unknown {
+  let current: unknown = value;
+  for (const segment of path.split(".")) {
+    if (current === null || typeof current !== "object") return undefined;
+    current = (current as Record<string, unknown>)[segment];
+  }
+  return current;
+}
+
+/** Set a dotted path on an object, creating intermediate objects. */
+function setPath(target: Record<string, unknown>, path: string, value: unknown): void {
+  const segments = path.split(".");
+  let current = target;
+  for (let i = 0; i < segments.length - 1; i++) {
+    const segment = segments[i]!;
+    const next = current[segment];
+    if (next === undefined || next === null || typeof next !== "object") {
+      current[segment] = {};
+    }
+    current = current[segment] as Record<string, unknown>;
+  }
+  current[segments[segments.length - 1]!] = value;
+}
+
+/**
+ * Keep only the requested dotted fields. Arrays are mapped item by item, so
+ * this works for list results and single objects alike.
+ */
+export function selectFields(value: unknown, paths: string[]): unknown {
+  const pick = (item: unknown): Record<string, unknown> => {
+    const out: Record<string, unknown> = {};
+    for (const path of paths) setPath(out, path, getPath(item, path));
+    return out;
+  };
+  return Array.isArray(value) ? value.map(pick) : pick(value);
+}
+
+/**
+ * Render rows as an aligned text table. Non-scalar cells are JSON-encoded.
+ * Columns come from the given paths, or the first row's keys.
+ */
+export function renderTable(rows: unknown[], columns?: string[]): string {
+  const keys = columns && columns.length > 0 ? columns : inferColumns(rows[0]);
+  if (keys.length === 0) return "";
+
+  const cell = (row: unknown, key: string): string => {
+    const value = getPath(row, key);
+    if (value === undefined || value === null) return "";
+    return typeof value === "object" ? JSON.stringify(value, bigIntReplacer) : String(value);
+  };
+
+  const body = rows.map((row) => keys.map((key) => cell(row, key)));
+  const widths = keys.map((key, i) =>
+    Math.max(key.length, ...body.map((cells) => cells[i]!.length)),
+  );
+  const format = (cells: string[]) =>
+    cells
+      .map((value, i) => value.padEnd(widths[i]!))
+      .join("  ")
+      .trimEnd();
+
+  return [format(keys), ...body.map(format)].join("\n");
+}
+
+function inferColumns(row: unknown): string[] {
+  if (row === null || typeof row !== "object" || Array.isArray(row)) return [];
+  return Object.keys(row as Record<string, unknown>);
+}
+
+/** Build the JSON error payload used by `--json-output`. */
+function errorPayload(err: unknown, verbose: boolean): unknown {
+  if (err instanceof SquareError) {
+    const payload: Record<string, unknown> = {
+      error: "square_api",
+      message: err.message,
+      statusCode: err.statusCode,
+      requestId: getRequestId(err),
+      errors: (err.errors ?? []).map((e) => ({
+        category: e.category,
+        code: e.code,
+        field: e.field,
+        detail: e.detail,
+      })),
+    };
+    if (verbose && err.body !== undefined) payload["body"] = err.body;
+    if (verbose && err.cause !== undefined) payload["cause"] = String(err.cause);
+    if (verbose) {
+      const traceId = getTraceId(err);
+      if (traceId) payload["traceId"] = traceId;
+    }
+    return payload;
+  }
+  const payload: Record<string, unknown> = {
+    error: "cli",
+    message: err instanceof Error ? err.message : String(err),
+  };
+  if (verbose && err instanceof Error && err.stack) payload["stack"] = err.stack;
+  return payload;
 }

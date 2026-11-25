@@ -4,7 +4,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { SquareError } from "square";
-import { renderError } from "../src/output.ts";
+import { renderError, renderTable, selectFields } from "../src/output.ts";
 
 function capture(err: unknown): { lines: string[]; code: number } {
   const lines: string[] = [];
@@ -165,5 +165,138 @@ describe("renderError - verbose", () => {
     const out = verboseCapture(new Error("boom"));
     expect(out).toContain("boom");
     expect(out).toMatch(/\n {2}at /);
+  });
+});
+
+describe("selectFields", () => {
+  test("keeps only requested fields on a single object", () => {
+    expect(selectFields({ id: "1", name: "x", extra: true }, ["id"])).toEqual({ id: "1" });
+  });
+
+  test("maps arrays item by item", () => {
+    expect(
+      selectFields(
+        [
+          { id: "1", name: "a" },
+          { id: "2", name: "b" },
+        ],
+        ["id"],
+      ),
+    ).toEqual([{ id: "1" }, { id: "2" }]);
+  });
+
+  test("supports dotted paths", () => {
+    expect(
+      selectFields({ amountMoney: { amount: 100, currency: "USD" } }, ["amountMoney.amount"]),
+    ).toEqual({ amountMoney: { amount: 100 } });
+  });
+
+  test("omits fields that are not present", () => {
+    expect(selectFields({ id: "1" }, ["nope"])).toEqual({});
+  });
+});
+
+describe("renderTable", () => {
+  test("aligns columns using the first row's keys", () => {
+    const text = renderTable([
+      { id: "a", name: "x" },
+      { id: "bb", name: "yy" },
+    ]);
+    expect(text.split("\n")).toEqual(["id  name", "a   x", "bb  yy"]);
+  });
+
+  test("uses explicit columns and dotted paths", () => {
+    const text = renderTable(
+      [{ id: "1", amountMoney: { amount: 100 } }],
+      ["id", "amountMoney.amount"],
+    );
+    expect(text.split("\n")).toEqual(["id  amountMoney.amount", "1   100"]);
+  });
+
+  test("JSON-encodes object cells", () => {
+    expect(renderTable([{ meta: { a: 1 } }])).toContain('{"a":1}');
+  });
+
+  test("renders blank cells for missing values", () => {
+    expect(renderTable([{ id: "1", name: undefined }])).toBe("id  name\n1");
+  });
+
+  test("returns an empty string when there are no columns", () => {
+    expect(renderTable([{}])).toBe("");
+  });
+});
+
+describe("renderError - json output", () => {
+  function jsonError(err: unknown, verbose = false): Record<string, unknown> {
+    const lines: string[] = [];
+    const code = renderError(err, { writeFn: (m) => lines.push(m), json: true, verbose });
+    expect(code).toBe(1);
+    return JSON.parse(lines[0]!);
+  }
+
+  test("emits a machine-readable CLI error", () => {
+    expect(jsonError(new Error("boom"))).toEqual({ error: "cli", message: "boom" });
+  });
+
+  test("includes status, request id and field errors for API errors", () => {
+    const err = new SquareError({
+      statusCode: 422,
+      body: {
+        errors: [
+          { category: "INVALID_REQUEST_ERROR", code: "BAD", field: "amount", detail: "nope" },
+        ],
+        request_id: "req-9",
+      },
+    });
+    const payload = jsonError(err);
+    expect(payload["error"]).toBe("square_api");
+    expect(payload["statusCode"]).toBe(422);
+    expect(payload["requestId"]).toBe("req-9");
+    expect(payload["errors"]).toEqual([
+      { category: "INVALID_REQUEST_ERROR", code: "BAD", field: "amount", detail: "nope" },
+    ]);
+  });
+
+  test("adds the raw body only in verbose mode", () => {
+    const err = new SquareError({ statusCode: 500, body: { errors: [] } });
+    expect(jsonError(err)["body"]).toBeUndefined();
+    expect(jsonError(err, true)["body"]).toBeDefined();
+  });
+});
+
+describe("renderError - trace id", () => {
+  function errorWithHeaders(headers: Headers): SquareError {
+    return new SquareError({
+      statusCode: 404,
+      body: { errors: [{ category: "INVALID_REQUEST_ERROR", code: "NOT_FOUND" }] },
+      rawResponse: { headers } as any,
+    });
+  }
+
+  test("prints cf-ray as a trace id in verbose mode", () => {
+    const lines: string[] = [];
+    renderError(errorWithHeaders(new Headers({ "cf-ray": "a5fd83bf-YYZ" })), {
+      writeFn: (m) => lines.push(m),
+      verbose: true,
+    });
+    expect(lines.join("\n")).toContain("trace id: a5fd83bf-YYZ");
+  });
+
+  test("omits the trace id without --verbose", () => {
+    const lines: string[] = [];
+    renderError(errorWithHeaders(new Headers({ "cf-ray": "abc-YYZ" })), {
+      writeFn: (m) => lines.push(m),
+    });
+    expect(lines.join("\n")).not.toContain("trace id");
+  });
+
+  test("includes traceId in verbose JSON errors", () => {
+    const lines: string[] = [];
+    renderError(errorWithHeaders(new Headers({ "cf-ray": "abc-YYZ" })), {
+      writeFn: (m) => lines.push(m),
+      verbose: true,
+      json: true,
+    });
+    expect(JSON.parse(lines[0]!).traceId).toBe("abc-YYZ");
   });
 });

@@ -8,6 +8,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- Errors no longer suggest a request id is always available: Square v2
+  responses usually omit one. `--verbose` now prints the Cloudflare `cf-ray`
+  trace id, which those responses do include.
 - `config set <profile> --token <new>` no longer resets the profile's
   environment to `sandbox` when `--env` is omitted. Existing environments are
   preserved; new profiles still default to sandbox.
@@ -23,8 +26,9 @@ All notable changes to this project are documented here. The format follows
   longer truncate every saved profile.
 - The config file is created `0600` inside a `0700` directory, and an existing
   file with looser permissions is tightened on read.
-- Buffered stdout/stderr is flushed before exiting, so large piped output is no
-  longer truncated by `process.exit()`.
+- Buffered stdout/stderr is flushed by letting the process exit naturally
+  instead of calling `process.exit()`, which truncated piped output; an
+  unref'd timer forces the exit if SDK handles keep the loop alive.
 - A `--field` path that conflicts with the existing body reports which parent
   conflicts (`"a.b" is already a number`) instead of throwing a bare
   `TypeError`, and no longer silently loses writes into an array.
@@ -39,6 +43,17 @@ All notable changes to this project are documented here. The format follows
 - `square search <term>` lists namespaces and methods whose name matches, with
   no credentials required; multi-word terms match a path
   (`square search "terminal actions"`).
+- `--select a,b.c` keeps only the listed fields (per item when the result is a
+  list), `--table` renders a list as an aligned table, and `--output <file>`
+  writes the result to a file instead of stdout.
+- `--json-output` now renders errors as a single JSON object on stderr.
+- `square completion bash|zsh|fish` prints a completion script generated from
+  the installed SDK.
+- `square doctor [--offline]` checks runtime, config permissions, credentials,
+  keychain availability and API reachability; exits 1 when a check fails.
+- `square config set <profile> --keychain` stores the token in the OS keychain
+  (macOS `security`, Linux `secret-tool`); `config get/list/remove` are
+  keychain-aware, and re-setting without `--keychain` moves it back to the file.
 
 ### Changed
 
@@ -56,6 +71,18 @@ All notable changes to this project are documented here. The format follows
   node, so bundle-only breakage is caught too.
 - Pushing a `v*` tag publishes to npm with provenance; the tag must match
   `package.json`.
+- `run()` takes one options object (`{ deps, stdout, stderr }`) instead of four
+  positional parameters.
+- API calls execute by walking straight to the namespace on the authenticated
+  client, instead of rebuilding the whole SDK tree a second time.
+- Config file IO uses `fs/promises`, matching the async API it already exposed.
+- `prompt.ts` builds its prompter from injectable streams (`createPrompter`),
+  so confirmations, hidden token entry and stdin reading are covered by tests.
+- Added subprocess e2e tests for broken pipes (real EPIPE) and piped output
+  larger than the pipe buffer, plus integration coverage for `--` and nested
+  help output.
+- Documented exit codes and CI usage, and added `CONTRIBUTING.md` with the
+  module layout and conventions.
 
 ### Added
 

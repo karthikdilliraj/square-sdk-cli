@@ -18,8 +18,13 @@ Global flags:
   --max-pages <n>       Stop paging after n pages
   --timeout <seconds>   HTTP timeout per request (SDK default if omitted)
   --retry <n>           Retry failed requests n times (SDK default: 2; 0 disables)
+  --select <a,b.c>      Keep only these fields in the output
+  --table               Render a list result as an aligned table
+  --output <file>       Write the result to a file instead of stdout
   --yes                 Skip the confirmation for write calls in production
   --verbose             Print request diagnostics and full error details to stderr
+  --keychain            Store/lookup the token in the OS keychain (config set)
+  --offline             Skip the API check (doctor)
   --version             Print the CLI and Square SDK versions
   --help                Show this help message
 `.trim();
@@ -57,6 +62,10 @@ export function renderRootHelp(tree: NamespaceNode): string {
   );
   lines.push(
     "  search <term>                                     Find namespaces and methods by name",
+  );
+  lines.push("  completion <bash|zsh|fish>                        Print a shell completion script");
+  lines.push(
+    "  doctor                                            Check config, auth and API reachability",
   );
   lines.push("");
   lines.push(GLOBAL_FLAGS);

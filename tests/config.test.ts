@@ -6,6 +6,7 @@ import {
   getProfile,
   listProfiles,
   load,
+  putProfile,
   removeProfile,
   save,
   setProfile,
@@ -238,5 +239,36 @@ describe("config - removeProfile", () => {
 
   it("throws for an unknown profile", async () => {
     await expect(removeProfile("nope")).rejects.toThrow(/does not exist/);
+  });
+});
+
+describe("config - keychain profiles", () => {
+  it("accepts a keychain profile without a token", async () => {
+    fs.writeFileSync(
+      tmpPath,
+      JSON.stringify({ profiles: { p: { environment: "sandbox", keychain: true } } }),
+    );
+    const cfg = await load();
+    expect(cfg.profiles["p"]).toEqual({ environment: "sandbox", keychain: true });
+  });
+
+  it("still rejects a profile with neither token nor keychain", async () => {
+    fs.writeFileSync(tmpPath, JSON.stringify({ profiles: { p: { environment: "sandbox" } } }));
+    await expect(load()).rejects.toThrow(/missing a "token"/);
+  });
+
+  it("rejects a non-boolean keychain flag", async () => {
+    fs.writeFileSync(
+      tmpPath,
+      JSON.stringify({ profiles: { p: { environment: "sandbox", keychain: "yes" } } }),
+    );
+    await expect(load()).rejects.toThrow(/non-boolean "keychain"/);
+  });
+
+  it("putProfile replaces the profile wholesale", async () => {
+    await setProfile("p", { token: "old", environment: "sandbox" });
+    await putProfile("p", { environment: "production", keychain: true });
+    const cfg = await load();
+    expect(cfg.profiles["p"]).toEqual({ environment: "production", keychain: true });
   });
 });

@@ -239,6 +239,38 @@ export function isReadOnlyMethod(name: string): boolean {
   return READ_ONLY_PREFIX.test(name);
 }
 
+/**
+ * Bind a method on a client instance by walking namespace segments.
+ *
+ * `buildTree` captures the instance it was built from, so its methods are bound
+ * to that client. Execution needs the authenticated client, so walk straight to
+ * the namespace on it and take the method there — no need to rebuild the tree.
+ */
+export function bindMethod(
+  client: object,
+  namespaceSegments: string[],
+  methodName: string,
+): MethodEntry | undefined {
+  let target = client as Record<string, unknown> | undefined;
+
+  for (const segment of namespaceSegments) {
+    const next = target?.[segment];
+    if (next === null || typeof next !== "object") return undefined;
+    target = next as Record<string, unknown>;
+  }
+
+  const owner = target as Record<string, unknown>;
+  const fn = owner[methodName];
+  if (typeof fn !== "function") return undefined;
+
+  return {
+    name: methodName,
+    arity: (fn as (...args: unknown[]) => unknown).length,
+    fn: (...args: unknown[]) =>
+      (owner[methodName] as (...a: unknown[]) => unknown).apply(owner, args),
+  };
+}
+
 export interface SearchMatch {
   /** Runnable command path: a method (`payments create`) or namespace (`terminal actions`). */
   path: string;

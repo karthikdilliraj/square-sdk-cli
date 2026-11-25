@@ -119,3 +119,19 @@ describe("resolveAuth - token source", () => {
     expect(resolveAuth({}, {}, configWithDefault).source).toBe('default profile "myprofile"');
   });
 });
+
+describe("resolveAuth - keychain profiles", () => {
+  it("explains that a keychain profile has no stored token", () => {
+    const cfg: Config = {
+      profiles: { p: { environment: "sandbox", keychain: true } },
+    };
+    expect(() => resolveAuth({ profile: "p" }, {}, cfg)).toThrow(/keychain.*no token was found/);
+  });
+
+  it("uses the token when the CLI populated it from the keychain", () => {
+    const cfg: Config = {
+      profiles: { p: { token: "from-keychain", environment: "sandbox", keychain: true } },
+    };
+    expect(resolveAuth({ profile: "p" }, {}, cfg).token).toBe("from-keychain");
+  });
+});

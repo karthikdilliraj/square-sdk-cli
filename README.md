@@ -49,6 +49,21 @@ square whoami                      # check the token: merchant, environment, tok
 Omitting `--token` (or passing `--token -`) keeps the token out of your shell
 history. `--token <ACCESS_TOKEN>` inline still works.
 
+### OS keychain
+
+Pass `--keychain` to keep the token out of the config file entirely (macOS
+`security`, Linux `secret-tool`):
+
+```bash
+square config set prod --env production --keychain     # token goes to the keychain
+square config get prod                                 # token: (stored in keychain)
+square config set prod --token -                       # moves it back to the file
+```
+
+Keychain profiles are marked `(keychain)` in `config list`, and removing the
+profile removes the keychain entry. Windows has no supported backend here, so
+`--keychain` reports an error and file storage should be used.
+
 Auth resolution order: `--profile <name>` → `--token` / `SQUARE_ACCESS_TOKEN`
 env → default profile.
 
@@ -100,8 +115,9 @@ square customers list --sortField DEFAULT --sortOrder ASC --stream
 
 A field whose name matches a global flag (`token`, `env`, `json`, `profile`,
 `stream`, `raw-page`, `dry-run`, `max-items`, `max-pages`, `timeout`, `retry`,
-`yes`, `verbose`, `json-output`, `help`, `version`) can't be set with `--name`;
-pass it through `--json` instead.
+`select`, `output`, `table`, `yes`, `verbose`, `keychain`, `offline`,
+`json-output`, `help`, `version`) can't be set with `--name`; pass it through
+`--json` instead.
 
 ```bash
 square payments create --json @payment.json --dry-run   # preview, nothing sent
@@ -123,12 +139,52 @@ square payments list --raw-page --limit 100 --cursor <cursor-from-previous-page>
 `--raw-page` cannot be combined with `--stream`, and `--max-items`/`--max-pages`
 don't apply to it.
 
+### Shaping output
+
+```bash
+square payments list --select id,amountMoney.amount      # keep only these fields
+square payments list --select id,status --table          # aligned text table
+square payments list --json-output --output payments.json
+square payments list --stream --output payments.ndjson
+```
+
+- `--select a,b.c` keeps the listed dotted fields (arrays are mapped per item,
+  and it works with `--stream`)
+- `--table` renders a list result as an aligned table; it needs a list and
+  can't be combined with `--json-output`, `--stream`, or `--raw-page`
+- `--output <file>` writes the result to a file instead of stdout (NDJSON when
+  streaming)
+
+### Shell completions
+
+```bash
+square completion bash > /etc/bash_completion.d/square
+square completion zsh  > ~/.zsh/completions/_square
+square completion fish > ~/.config/fish/completions/square.fish
+```
+
+Completions are generated from the installed SDK, so they cover every namespace
+and method after an SDK update.
+
+### Checking your setup
+
+```bash
+square doctor            # runtime, config file, credentials, keychain, API
+square doctor --offline  # skip the API round-trip
+square doctor --json-output
+```
+
+`doctor` exits 1 when a check fails and prints the reason (for example a config
+file with loose permissions or a missing keychain entry).
+
 ### Diagnosing calls
 
 `--verbose` prints the call, environment, auth source and duration to stderr,
 and on failure includes the raw error body, underlying cause, and stack trace.
-Square API errors always print the API's `request id` when it is available —
-include it when asking Square support about a call.
+Square's v2 responses usually carry no request id, so errors don't print one;
+with `--verbose` the Cloudflare `cf-ray` trace id is shown instead — that's the
+value to give Square support. If an API does return a request id (header or
+`request_id` in the body), it is printed too.
 
 Unknown namespace and method names suggest the closest match
 (`Did you mean "payments"?`) instead of dumping hundreds of valid names.
@@ -149,10 +205,29 @@ Unknown namespace and method names suggest the closest match
 | `--max-pages <n>` | stop paging after n pages                 |
 | `--timeout <seconds>` | HTTP timeout per request (SDK default if omitted) |
 | `--retry <n>`   | retry failed requests n times (SDK default 2; 0 disables) |
+| `--select <a,b.c>` | keep only these fields in the output       |
+| `--table`       | render a list result as an aligned table    |
+| `--output <file>` | write the result to a file instead of stdout |
 | `--yes`         | skip the production write confirmation      |
 | `--verbose`     | request diagnostics and full error details on stderr |
+| `--keychain`    | store/look up the token in the OS keychain (`config set`) |
+| `--offline`     | skip the API check (`doctor`)               |
 | `--version`     | print the CLI and Square SDK versions       |
 | `--help`        | show help                                   |
+
+With `--json-output`, errors are emitted as a single JSON object on stderr
+(`{"error":"square_api"|"cli","message":…,"requestId":…}`), so scripts can
+parse failures instead of scraping prose.
+
+### Exit codes
+
+| Code | Meaning |
+| ---- | ------- |
+| 0 | Success, help, or `--version` |
+| 1 | Any failure: bad flags, unknown command, auth error, API error, failed `doctor` check, aborted confirmation |
+
+`--stream` writes items as it goes; if the call fails mid-stream, already
+emitted lines remain on stdout and the error goes to stderr.
 
 ### Safety defaults
 
@@ -170,6 +245,24 @@ Unknown namespace and method names suggest the closest match
 
 > Per-field help is structural only — the SDK's field schemas live in its
 > `.d.ts` types and aren't available at runtime. Use `--json` for full bodies.
+
+## Using in CI
+
+```yaml
+- name: Fetch recent payments
+  env:
+    SQUARE_ACCESS_TOKEN: ${{ secrets.SQUARE_ACCESS_TOKEN }}
+    SQUARE_ENVIRONMENT: production
+  run: |
+    square doctor --offline
+    square payments list --sortField CREATED_AT --json-output --output payments.json
+```
+
+- Use `SQUARE_ACCESS_TOKEN` + `SQUARE_ENVIRONMENT` instead of profiles in CI.
+- `--json-output` plus `--output` keeps machine-readable results out of the log.
+- Writes in production need `--yes`; `--retry 0` disables SDK retries when a
+  step must be single-shot.
+- Exit code 1 on any failure, so the step fails naturally.
 
 ## Develop
 

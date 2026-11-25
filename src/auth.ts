@@ -2,7 +2,7 @@
  * auth.ts - Resolve authentication from flags, environment, and config.
  */
 
-import type { Config } from "./config.ts";
+import type { Config, Profile } from "./config.ts";
 
 export interface AuthFlags {
   profile?: string;
@@ -49,6 +49,23 @@ function resolveProfileEnvironment(
 }
 
 /**
+ * The token for a config profile. Keychain profiles only carry a token after
+ * the CLI looks it up, so a missing one means the keychain entry is gone.
+ */
+function profileToken(profile: Profile, name: string): string {
+  if (profile.token) return profile.token;
+  if (profile.keychain) {
+    throw new Error(
+      `Profile "${name}" stores its token in the OS keychain, but no token was found. ` +
+        `Re-run \`square config set ${name} --token - --keychain\` to store it again.`,
+    );
+  }
+  throw new Error(
+    `Profile "${name}" has no token. Re-run \`square config set ${name} --token -\`.`,
+  );
+}
+
+/**
  * Resolve auth with precedence:
  * 1) --profile flag (must exist in config); an explicit --env overrides the
  *    profile's environment, while SQUARE_ENVIRONMENT does not (a profile's
@@ -66,7 +83,7 @@ export function resolveAuth(flags: AuthFlags, env: EnvVars, config: Config): Res
       );
     }
     return {
-      token: profile.token,
+      token: profileToken(profile, flags.profile),
       environment: resolveProfileEnvironment(flags, profile.environment),
       source: `profile "${flags.profile}"`,
     };
@@ -84,7 +101,7 @@ export function resolveAuth(flags: AuthFlags, env: EnvVars, config: Config): Res
     const profile = config.profiles[config.defaultProfile];
     if (profile) {
       return {
-        token: profile.token,
+        token: profileToken(profile, config.defaultProfile),
         environment: resolveProfileEnvironment(flags, profile.environment),
         source: `default profile "${config.defaultProfile}"`,
       };

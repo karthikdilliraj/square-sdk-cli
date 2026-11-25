@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
+  bindMethod,
   buildTree,
   isReadOnlyMethod,
   resolvePath,
@@ -203,6 +204,36 @@ describe("did-you-mean in resolvePath", () => {
   it("keeps the full list when there is no close match", () => {
     const result = resolvePath(buildTree(createMockClient()), ["zzzzz"]);
     expect("error" in result && result.error).toMatch(/Valid options:/);
+  });
+});
+
+describe("bindMethod", () => {
+  it("binds a top-level namespace method", async () => {
+    const method = bindMethod(createMockClient(), ["payments"], "list")!;
+    const page = (await method.fn({})) as any;
+    expect(page.data.map((p: any) => p.id)).toEqual(["pay1", "pay2"]);
+  });
+
+  it("binds a nested namespace method", async () => {
+    const method = bindMethod(createMockClient(), ["terminal", "actions"], "create")!;
+    const result = (await method.fn({})) as any;
+    expect(result.action.id).toBe("new-action");
+  });
+
+  it("binds `this` so methods can use instance state", async () => {
+    const method = bindMethod(createMockClient(), ["payments"], "list")!;
+    const page = (await method.fn({})) as any;
+    // `_items` is instance state; a lost `this` would throw or be empty.
+    expect(page.data).toHaveLength(2);
+    expect(page.hasNextPage()).toBe(true);
+  });
+
+  it("returns undefined for an unknown namespace", () => {
+    expect(bindMethod(createMockClient(), ["nope"], "list")).toBeUndefined();
+  });
+
+  it("returns undefined for an unknown method", () => {
+    expect(bindMethod(createMockClient(), ["payments"], "nope")).toBeUndefined();
   });
 });
 

@@ -2,14 +2,17 @@
  * config.ts - Profile-based configuration management.
  */
 
-import { randomUUID } from "crypto";
-import * as fs from "fs";
-import * as os from "os";
-import * as path from "path";
+import { randomUUID } from "node:crypto";
+import { chmod, mkdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
+import * as os from "node:os";
+import * as path from "node:path";
 
 export interface Profile {
-  token: string;
+  /** Absent when the token lives in the OS keychain. */
+  token?: string;
   environment: "sandbox" | "production";
+  /** Token is stored in the OS keychain rather than the config file. */
+  keychain?: boolean;
 }
 
 export interface Config {
@@ -17,7 +20,7 @@ export interface Config {
   profiles: Record<string, Profile>;
 }
 
-function getConfigPath(): string {
+export function getConfigPath(): string {
   const override = process.env["SQUARE_CLI_CONFIG"];
   if (override) return override;
 
@@ -29,13 +32,16 @@ function getConfigPath(): string {
 export async function load(): Promise<Config> {
   const configPath = getConfigPath();
 
-  if (!fs.existsSync(configPath)) {
-    return { profiles: {} };
+  let raw: string;
+  try {
+    raw = await readFile(configPath, "utf8");
+  } catch (e: unknown) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return { profiles: {} };
+    throw e;
   }
 
-  ensureOwnerOnlyPermissions(configPath);
+  await ensureOwnerOnlyPermissions(configPath);
 
-  const raw = fs.readFileSync(configPath, "utf8");
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -68,7 +74,11 @@ function validateConfig(parsed: unknown, configPath: string): Config {
   for (const [name, profile] of Object.entries(profiles as Record<string, unknown>)) {
     if (!isObject(profile)) fail(`profile "${name}" must be an object`);
     const p = profile as Record<string, unknown>;
-    if (typeof p["token"] !== "string" || p["token"] === "") {
+    if (p["keychain"] !== undefined && typeof p["keychain"] !== "boolean") {
+      fail(`profile "${name}" has a non-boolean "keychain"`);
+    }
+    const usesKeychain = p["keychain"] === true;
+    if (!usesKeychain && (typeof p["token"] !== "string" || p["token"] === "")) {
       fail(`profile "${name}" is missing a "token"`);
     }
     if (p["environment"] !== "sandbox" && p["environment"] !== "production") {
@@ -92,13 +102,13 @@ function validateConfig(parsed: unknown, configPath: string): Config {
  * being copied or restored from a backup). Best effort — a read-only file
  * surfaces its own error later.
  */
-function ensureOwnerOnlyPermissions(configPath: string): void {
+async function ensureOwnerOnlyPermissions(configPath: string): Promise<void> {
   if (process.platform === "win32") return;
   try {
-    const mode = fs.statSync(configPath).mode & 0o777;
-    if (mode & 0o077) fs.chmodSync(configPath, 0o600);
+    const { mode } = await stat(configPath);
+    if (mode & 0o077) await chmod(configPath, 0o600);
   } catch {
-    // Ignore: reading the file below will report anything that matters.
+    // Ignore: reading the file will report anything that matters.
   }
 }
 
@@ -111,7 +121,7 @@ export async function save(cfg: Config): Promise<void> {
   const configPath = getConfigPath();
   const dir = path.dirname(configPath);
 
-  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  await mkdir(dir, { recursive: true, mode: 0o700 });
 
   const content = JSON.stringify(cfg, null, 2);
   const tmpPath = path.join(
@@ -119,11 +129,11 @@ export async function save(cfg: Config): Promise<void> {
     `.${path.basename(configPath)}.${process.pid}.${randomUUID()}.tmp`,
   );
   try {
-    fs.writeFileSync(tmpPath, content, { mode: 0o600 });
-    fs.renameSync(tmpPath, configPath);
+    await writeFile(tmpPath, content, { mode: 0o600 });
+    await rename(tmpPath, configPath);
   } catch (e) {
     try {
-      fs.unlinkSync(tmpPath);
+      await unlink(tmpPath);
     } catch {
       // Nothing to clean up.
     }
@@ -135,6 +145,13 @@ export async function setProfile(name: string, partial: Partial<Profile>): Promi
   const cfg = await load();
   const existing = cfg.profiles[name] ?? { token: "", environment: "sandbox" as const };
   cfg.profiles[name] = { ...existing, ...partial } as Profile;
+  await save(cfg);
+}
+
+/** Replace a profile wholesale (used when moving its token to the keychain). */
+export async function putProfile(name: string, profile: Profile): Promise<void> {
+  const cfg = await load();
+  cfg.profiles[name] = profile;
   await save(cfg);
 }
 
